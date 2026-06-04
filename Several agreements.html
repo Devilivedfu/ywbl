@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>协议签署</title>
+    <style>
+        :root {
+            --primary-blue: #3b5998;
+            --primary-blue-hover: #344d85;
+            --text-main: #333333;
+            --text-secondary: #666666;
+            --text-light: #999999;
+            --bg-color: #ffffff;
+            --border-color: #e0e0e0;
+            --stepper-inactive-bg: #f0f0f0;
+
+            --spacing-xs: 6px;
+            --spacing-sm: 10px;
+            --spacing-md: 14px;
+            --spacing-lg: 20px;
+            --spacing-xl: 24px;
+
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            font-family: var(--font-family);
+            background-color: #f5f5f5;
+            color: var(--text-main);
+            display: flex;
+            justify-content: center;
+            min-height: 100vh;
+        }
+
+        .app-container {
+            width: 100%;
+            max-width: 375px;
+            background-color: var(--bg-color);
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            min-height: 100vh;
+            box-shadow: 0 0 20px rgba(0,0,0,0.05);
+        }
+
+        .nav-header {
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            background-color: var(--bg-color);
+            border-bottom: 0.5px solid rgba(0,0,0,0.05);
+        }
+
+        .back-btn {
+            position: absolute;
+            left: var(--spacing-md);
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 4px;
+            display: flex;
+            align-items: center;
+            color: var(--primary-blue);
+        }
+
+        .back-btn svg {
+            width: 22px;
+            height: 22px;
+            fill: currentColor;
+        }
+
+        .header-title {
+            font-size: 17px;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        main {
+            flex: 1;
+            padding: var(--spacing-lg) var(--spacing-md) 80px var(--spacing-md);
+            overflow-y: auto;
+        }
+
+        .stepper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 20px;
+            margin-bottom: 28px;
+        }
+
+        .step-circle {
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .step-active {
+            width: 38px;
+            height: 38px;
+            font-size: 17px;
+            border: 1.5px solid var(--primary-blue);
+            color: var(--primary-blue);
+            background-color: transparent;
+        }
+
+        .step-inactive {
+            width: 33px;
+            height: 33px;
+            font-size: 13px;
+            background-color: var(--stepper-inactive-bg);
+            color: var(--text-light);
+        }
+
+        .step-done {
+            width: 33px;
+            height: 33px;
+            font-size: 0;
+            background: url('../../文档/部分视觉图片/完成小@2x.png') no-repeat center / contain;
+            border: none;
+        }
+
+        .doc-title {
+            font-size: 18px;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 24px;
+            color: var(--text-main);
+            letter-spacing: 0.5px;
+        }
+
+        .doc-wrapper {
+            position: relative;
+        }
+
+        .doc-body {
+            font-size: 14px;
+            line-height: 1.75;
+            color: #444;
+            text-align: justify;
+            position: relative;
+        }
+
+        .doc-body p {
+            margin-bottom: 12px;
+        }
+
+        .fab-scroll {
+            position: fixed;
+            right: 20px;
+            bottom: 80px;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            z-index: 50;
+            transition: opacity 0.2s ease;
+        }
+
+        .fab-scroll img {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .fab-scroll:active {
+            opacity: 0.8;
+        }
+
+        .fab-scroll.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .fab-top {
+            position: fixed;
+            right: 20px;
+            bottom: 80px;
+            width: 48px;
+            height: 48px;
+            cursor: pointer;
+            z-index: 50;
+            transition: opacity 0.2s ease;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .fab-top img {
+            width: 100%;
+            height: 100%;
+            display: block;
+        }
+
+        .fab-top:active {
+            opacity: 0.8;
+        }
+
+        .fab-top.visible {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .footer-cta {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px var(--spacing-md);
+            background-color: var(--bg-color);
+            padding-bottom: calc(10px + env(safe-area-inset-bottom));
+            z-index: 99;
+        }
+
+        @media (min-width: 376px) {
+            .footer-cta {
+                max-width: 375px;
+                left: 50%;
+                transform: translateX(-50%);
+            }
+            .fab-scroll {
+                right: calc(50% - 375px / 2 + 20px);
+            }
+            .fab-top {
+                right: calc(50% - 375px / 2 + 20px);
+            }
+        }
+
+        .btn-agree {
+            width: 100%;
+            background-color: var(--primary-blue);
+            color: white;
+            border: none;
+            border-radius: 6px;
+            padding: 13px 0;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-agree:hover {
+            background-color: var(--primary-blue-hover);
+        }
+
+        .btn-agree:active {
+            opacity: 0.9;
+            transform: scale(0.99);
+        }
+
+        .btn-agree.disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .btn-agree.disabled:active {
+            opacity: 1;
+            transform: none;
+        }
+
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.4);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 200;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s;
+        }
+
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .modal-box {
+            background: #fff;
+            border-radius: 12px;
+            padding: 24px 0 0;
+            width: 280px;
+            text-align: center;
+            font-size: 15px;
+            color: var(--text-main);
+            line-height: 1.6;
+            overflow: hidden;
+        }
+
+        .modal-content {
+            padding: 0 20px;
+        }
+
+        .modal-divider {
+            width: 100%;
+            height: 1px;
+            background-color: #E1E8F0;
+            margin-top: 16px;
+        }
+
+        .modal-box .modal-btn {
+            display: block;
+            width: 100%;
+            padding: 0;
+            margin-top: 0;
+            height: 45px;
+            border: none;
+            background: none;
+            color: var(--primary-blue);
+            font-size: 14px;
+            cursor: pointer;
+        }
+    </style>
+
+</head>
+<body>
+
+<div class="app-container">
+
+    <nav class="nav-header">
+        <button class="back-btn" aria-label="返回">
+            <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" fill="currentColor"/></svg>
+        </button>
+        <h1 class="header-title">协议签署</h1>
+    </nav>
+
+    <main>
+        <div class="stepper">
+            <div class="step-circle step-active">1</div>
+            <div class="step-circle step-inactive">2</div>
+            <div class="step-circle step-inactive">3</div>
+        </div>
+
+        <article class="doc-wrapper">
+            <h2 class="doc-title">主板投资风险揭示书</h2>
+
+            <div class="doc-body">
+                <p>尊敬的客户：</p>
+                <p>在您投资风险警示股票时，请您充分了解风险警示股票的交易风险，认真阅读下列条款：</p>
+                <p><strong>一、</strong>客户在参与风险警示股票交易前，应充分了解相关交易风险。客户买卖风险警示股票应当采用限价委托的方式。</p>
+                <p><strong>二、</strong>客户在参与风险警示股票交易前，应充分了解风险警示股票价格的涨跌幅限制与其他股票的涨跌幅限制不同。风险警示股票的涨跌幅比例为5%，低于正常股票的10%涨跌幅限制。</p>
+                <p><strong>三、</strong>风险警示股票盘中换手率达到或超过一定比例的，属于异常波动，交易所可以根据市场需要，对其实施盘中临时停牌。临时停牌时间不超过30分钟，停牌期间投资者可以撤销未成交的申报。</p>
+                <p><strong>四、</strong>投资者当日通过竞价交易和大宗交易累计买入的单只风险警示股票，数量不得超过50万股。投资者当日累计买入风险警示股票数量，按照该投资者以本人名义开立的证券账户与融资融券信用证券账户的买入量合并计算。投资者委托买入数量与当日已买入数量及已申报买入但尚未成交、也未撤销的数量之和，不得超过50万股。</p>
+                <p><strong>五、</strong>客户应当充分了解风险警示股票的退市风险。上市公司被实施退市风险警示后，如果在其后的一个会计年度继续亏损，公司股票可能被暂停上市；如果暂停上市后仍未满足恢复上市条件，公司股票可能被终止上市。投资者买入被实施退市风险警示的股票，面临较大的投资损失风险。</p>
+                <p><strong>六、</strong>客户应当关注风险警示股票的信息披露。上市公司被实施风险警示期间，应当至少每五个交易日披露一次风险提示公告。投资者应当密切关注公司公告，及时了解公司经营状况和风险事项的变化。</p>
+                <p><strong>七、</strong>客户应当充分了解，风险警示股票的流动性可能显著低于正常交易的股票。在极端行情下，可能出现无法及时卖出的情况，导致投资者遭受较大损失。</p>
+                <p><strong>八、</strong>客户应当了解，因上市公司重大违法违规行为导致公司股票被强制退市的，投资者可能面临投资本金全部损失的风险。建议投资者谨慎评估自身风险承受能力，理性参与风险警示股票交易。</p>
+                <p><strong>九、</strong>本风险揭示书无法详尽列举风险警示股票交易的所有风险。客户在参与交易前，应当认真阅读相关法律法规、交易所业务规则及本公司相关业务规定，充分了解交易规则和风险特征。</p>
+                <p><strong>十、</strong>客户签署本风险揭示书，即表示客户已充分阅读并理解本揭示书的全部内容，自愿承担参与风险警示股票交易可能带来的投资风险和损失。客户确认本揭示书的签署是其真实意思表示。</p>
+                <p style="margin-top: 24px; text-align: right; color: #666;">签署人（客户）：__________________</p>
+                <p style="text-align: right; color: #666;">签署日期：________年____月____日</p>
+                <p id="doc-bottom" style="height: 1px; overflow: hidden;"></p>
+            </div>
+        </article>
+    </main>
+
+    <div class="fab-scroll" aria-label="直达底部">
+        <img src="../../文档/部分视觉图片/下@2x.png" alt="直达底部">
+    </div>
+
+    <div class="fab-top" aria-label="回到顶部">
+        <img src="../../文档/部分视觉图片/上@2x.png" alt="回到顶部">
+    </div>
+
+    <footer class="footer-cta">
+        <button class="btn-agree disabled">我已阅读并同意签署上述文件</button>
+    </footer>
+
+    <div class="modal-overlay" id="modal">
+        <div class="modal-box">
+            <div class="modal-content">
+                <p id="modal-msg">请下拉阅读完整内容后再签署</p>
+            </div>
+            <div class="modal-divider"></div>
+            <button class="modal-btn" id="modal-close">我知道了</button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const agreements = [
+        {
+            title: '主板投资风险揭示书',
+            body: `<p>尊敬的客户：</p>
+                <p>在您投资风险警示股票时，请您充分了解风险警示股票的交易风险，认真阅读下列条款：</p>
+                <p><strong>一、</strong>客户在参与风险警示股票交易前，应充分了解相关交易风险。客户买卖风险警示股票应当采用限价委托的方式。</p>
+                <p><strong>二、</strong>客户在参与风险警示股票交易前，应充分了解风险警示股票价格的涨跌幅限制与其他股票的涨跌幅限制不同。风险警示股票的涨跌幅比例为5%，低于正常股票的10%涨跌幅限制。</p>
+                <p><strong>三、</strong>风险警示股票盘中换手率达到或超过一定比例的，属于异常波动，交易所可以根据市场需要，对其实施盘中临时停牌。临时停牌时间不超过30分钟，停牌期间投资者可以撤销未成交的申报。</p>
+                <p><strong>四、</strong>投资者当日通过竞价交易和大宗交易累计买入的单只风险警示股票，数量不得超过50万股。投资者当日累计买入风险警示股票数量，按照该投资者以本人名义开立的证券账户与融资融券信用证券账户的买入量合并计算。投资者委托买入数量与当日已买入数量及已申报买入但尚未成交、也未撤销的数量之和，不得超过50万股。</p>
+                <p><strong>五、</strong>客户应当充分了解风险警示股票的退市风险。上市公司被实施退市风险警示后，如果在其后的一个会计年度继续亏损，公司股票可能被暂停上市；如果暂停上市后仍未满足恢复上市条件，公司股票可能被终止上市。</p>
+                <p><strong>六、</strong>客户应当关注风险警示股票的信息披露。上市公司被实施风险警示期间，应当至少每五个交易日披露一次风险提示公告。</p>
+                <p><strong>七、</strong>客户应当充分了解，风险警示股票的流动性可能显著低于正常交易的股票。在极端行情下，可能出现无法及时卖出的情况。</p>
+                <p><strong>八、</strong>因上市公司重大违法违规行为导致公司股票被强制退市的，投资者可能面临投资本金全部损失的风险。</p>
+                <p><strong>九、</strong>本风险揭示书无法详尽列举风险警示股票交易的所有风险。客户在参与交易前，应当认真阅读相关法律法规、交易所业务规则及本公司相关业务规定。</p>
+                <p><strong>十、</strong>客户签署本风险揭示书，即表示客户已充分阅读并理解本揭示书的全部内容，自愿承担参与风险警示股票交易可能带来的投资风险和损失。</p>
+                <p style="margin-top: 24px; text-align: right; color: #666;">签署人（客户）：__________________</p>
+                <p style="text-align: right; color: #666;">签署日期：________年____月____日</p>
+                <p id="doc-bottom" style="height: 1px; overflow: hidden;"></p>`
+        },
+        {
+            title: '创业板风险揭示书',
+            body: `<p>尊敬的客户：</p>
+                <p>在您投资风险警示股票时，请您充分了解风险警示股票的交易风险，认真阅读下列条款：</p>
+                <p><strong>一、</strong>客户在参与风险警示股票交易前，应充分了解相关交易风险。客户买卖风险警示股票应当采用限价委托的方式。</p>
+                <p><strong>二、</strong>客户在参与风险警示股票交易前，应充分了解风险警示股票价格的涨跌幅限制与其他股票的涨跌幅限制不同。风险警示股票的涨跌幅比例为5%，低于正常股票的10%涨跌幅限制。</p>
+                <p><strong>三、</strong>风险警示股票盘中换手率达到或超过一定比例的，属于异常波动，交易所可以根据市场需要，对其实施盘中临时停牌。临时停牌时间不超过30分钟，停牌期间投资者可以撤销未成交的申报。</p>
+                <p><strong>四、</strong>投资者当日通过竞价交易和大宗交易累计买入的单只风险警示股票，数量不得超过50万股。投资者当日累计买入风险警示股票数量，按照该投资者以本人名义开立的证券账户与融资融券信用证券账户的买入量合并计算。</p>
+                <p><strong>五、</strong>客户应当充分了解风险警示股票的退市风险。上市公司被实施退市风险警示后，如果在其后的一个会计年度继续亏损，公司股票可能被暂停上市。</p>
+                <p><strong>六、</strong>客户应当关注风险警示股票的信息披露。上市公司被实施风险警示期间，应当至少每五个交易日披露一次风险提示公告。</p>
+                <p><strong>七、</strong>客户应当充分了解，风险警示股票的流动性可能显著低于正常交易的股票。</p>
+                <p><strong>八、</strong>因上市公司重大违法违规行为导致公司股票被强制退市的，投资者可能面临投资本金全部损失的风险。</p>
+                <p><strong>九、</strong>本风险揭示书无法详尽列举风险警示股票交易的所有风险。</p>
+                <p><strong>十、</strong>客户签署本风险揭示书，即表示客户已充分阅读并理解本揭示书的全部内容，自愿承担投资风险和损失。</p>
+                <p style="margin-top: 24px; text-align: right; color: #666;">签署人（客户）：__________________</p>
+                <p style="text-align: right; color: #666;">签署日期：________年____月____日</p>
+                <p id="doc-bottom" style="height: 1px; overflow: hidden;"></p>`
+        },
+        {
+            title: '科创板风险揭示书',
+            body: `<p>尊敬的客户：</p>
+                <p>科创板股票交易具有较大的投资风险，请您认真阅读以下风险揭示内容，充分了解科创板股票交易的相关规则和风险特征：</p>
+                <p><strong>一、</strong>科创板股票的涨跌幅限制为20%，较主板和中小板更为宽松，股价波动幅度可能更大，投资者面临的市场风险显著增加。</p>
+                <p><strong>二、</strong>科创板企业多为高新技术产业和战略性新兴产业，技术迭代快、经营不确定性高，部分企业可能长期无法盈利甚至退市。</p>
+                <p><strong>三、</strong>科创板股票上市前五个交易日不设涨跌幅限制，股价可能在短期内出现大幅波动，投资者应当充分评估自身风险承受能力。</p>
+                <p><strong>四、</strong>科创板引入了盘中临时停牌机制，股票盘中交易价格较当日开盘价格首次上涨或下跌达到30%、60%时，将触发临时停牌。</p>
+                <p><strong>五、</strong>科创板股票的投资者准入门槛较高，个人投资者需满足证券账户及资金账户内资产不低于人民币50万元，且参与证券交易满24个月。</p>
+                <p><strong>六、</strong>科创板企业可能存在尚未盈利、存在累计未弥补亏损等情形，投资价值判断难度较大，传统估值方法可能不适用。</p>
+                <p><strong>七、</strong>科创板实行注册制，发行上市条件与核准制存在较大差异，监管部门不对发行人的投资价值进行实质性判断。</p>
+                <p><strong>八、</strong>科创板股票的退市制度更为严格，触及退市标准的公司将直接终止上市，不再设置暂停上市和恢复上市环节。</p>
+                <p><strong>九、</strong>科创板股票的交易机制包括竞价交易、盘后固定价格交易和大宗交易等方式，部分交易方式的流动性可能较低。</p>
+                <p><strong>十、</strong>客户签署本风险揭示书，即表示已充分阅读并理解全部内容，自愿承担科创板股票投资可能带来的风险和损失。</p>
+                <p style="margin-top: 24px; text-align: right; color: #666;">签署人（客户）：__________________</p>
+                <p style="text-align: right; color: #666;">签署日期：________年____月____日</p>
+                <p id="doc-bottom" style="height: 1px; overflow: hidden;"></p>`
+        }
+    ];
+
+    let currentStep = 0;
+    let signedStep = 0;
+    let allDone = false;
+    let countdownTimer = null;
+    let hasReadBottom = false;
+    const steps = document.querySelectorAll('.step-circle');
+    const docTitle = document.querySelector('.doc-title');
+    const docBody = document.querySelector('.doc-body');
+    const btnAgree = document.querySelector('.btn-agree');
+    const fabDown = document.querySelector('.fab-scroll');
+    const fabUp = document.querySelector('.fab-top');
+    const modal = document.getElementById('modal');
+    const modalMsg = document.getElementById('modal-msg');
+    const modalClose = document.getElementById('modal-close');
+
+    function isScrolledToBottom() {
+        return (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 60);
+    }
+
+    function showModal(msg) {
+        modalMsg.textContent = msg;
+        modal.classList.add('show');
+    }
+
+    modalClose.addEventListener('click', () => modal.classList.remove('show'));
+    modal.addEventListener('click', (e) => { if (e.target === modal) modal.classList.remove('show'); });
+
+    function updateButton() {
+        if (allDone) {
+            btnAgree.textContent = '全部协议已签署完成';
+            btnAgree.classList.add('disabled');
+            return;
+        }
+
+        const isFirst = (signedStep === 0 && currentStep === 0);
+        if (isFirst && countdownTimer) return; // 倒计时中，由 startCountdown 控制
+
+        btnAgree.textContent = '我已阅读并同意签署上述文件';
+        btnAgree.classList.remove('disabled');
+    }
+
+    function startCountdown() {
+        if (countdownTimer) return;
+        let sec = 3;
+        btnAgree.textContent = '我已阅读并同意签署上述文件（3s）';
+        btnAgree.classList.add('disabled');
+        countdownTimer = setInterval(() => {
+            sec--;
+            if (sec <= 0) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+                btnAgree.textContent = '我已阅读并同意签署上述文件';
+                btnAgree.classList.remove('disabled');
+            } else {
+                btnAgree.textContent = `我已阅读并同意签署上述文件（${sec}s）`;
+            }
+        }, 1000);
+    }
+
+    function renderAgreement(index) {
+        if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+        hasReadBottom = false;
+
+        const a = agreements[index];
+        docTitle.textContent = a.title;
+        docBody.innerHTML = a.body;
+
+        steps.forEach((s, i) => {
+            s.className = 'step-circle';
+            if (i < signedStep || (allDone && i === agreements.length - 1)) s.classList.add('step-done');
+            else if (i === currentStep) s.classList.add('step-active');
+            else s.classList.add('step-inactive');
+        });
+
+        fabDown.classList.remove('hidden');
+        fabUp.classList.remove('visible');
+        window.scrollTo({ top: 0, behavior: 'auto' });
+
+        // 第一份待签协议启动倒计时，其余直接显示正常按钮
+        const isFirst = (signedStep === 0 && currentStep === 0);
+        if (isFirst && !allDone) {
+            startCountdown();
+        } else {
+            updateButton();
+        }
+    }
+
+    btnAgree.addEventListener('click', () => {
+        if (allDone) return;
+        if (btnAgree.classList.contains('disabled')) return;
+        if (!hasReadBottom) {
+            showModal('请下拉阅读完整内容后再签署');
+            return;
+        }
+        if (currentStep < agreements.length - 1) {
+            signedStep = currentStep + 1;
+            currentStep = signedStep;
+            renderAgreement(currentStep);
+        } else {
+            allDone = true;
+            signedStep = agreements.length - 1;
+            renderAgreement(currentStep);
+            showModal('全部协议签署完成');
+        }
+    });
+
+    // 滑动手势
+    let touchStartX = 0;
+    let touchStartY = 0;
+    let touchDeltaX = 0;
+    const mainEl = document.querySelector('main');
+    const SWIPE_THRESHOLD = 60;
+
+    mainEl.addEventListener('touchstart', (e) => {
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+        touchDeltaX = 0;
+    }, { passive: true });
+
+    mainEl.addEventListener('touchmove', (e) => {
+        touchDeltaX = e.touches[0].clientX - touchStartX;
+        const deltaY = Math.abs(e.touches[0].clientY - touchStartY);
+        // 水平滑动大于垂直时阻止默认滚动
+        if (Math.abs(touchDeltaX) > deltaY && Math.abs(touchDeltaX) > 10) {
+            e.preventDefault();
+        }
+    }, { passive: false });
+
+    mainEl.addEventListener('touchend', () => {
+        if (Math.abs(touchDeltaX) < SWIPE_THRESHOLD) return;
+
+        if (touchDeltaX < 0) {
+            // 左滑 → 下一份
+            if (currentStep < signedStep && currentStep < agreements.length - 1) {
+                currentStep++;
+                renderAgreement(currentStep);
+            }
+        } else {
+            // 右滑 → 上一份
+            if (currentStep > 0) {
+                currentStep--;
+                renderAgreement(currentStep);
+            }
+        }
+    }, { passive: true });
+
+    fabDown.addEventListener('click', () => {
+        document.getElementById('doc-bottom').scrollIntoView({ behavior: 'smooth' });
+    });
+
+    fabUp.addEventListener('click', () => {
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    });
+
+    window.addEventListener('scroll', () => {
+        const scrolledToBottom = (window.innerHeight + window.scrollY) >= (document.body.offsetHeight - 60);
+        fabDown.classList.toggle('hidden', scrolledToBottom);
+        fabUp.classList.toggle('visible', scrolledToBottom);
+
+        if (scrolledToBottom && !hasReadBottom) {
+            hasReadBottom = true;
+            updateButton();
+        }
+    });
+
+    // 初始化
+    renderAgreement(0);
+</script>
+
+</body>
+</html>
