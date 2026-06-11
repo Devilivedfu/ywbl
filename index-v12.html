@@ -1,0 +1,764 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>佣金与服务费率查询</title>
+<script src="https://unpkg.com/@phosphor-icons/web"></script>
+<style>
+:root {
+  --primary: #3b63e1;
+  --primary-shadow: rgba(59,99,225,0.3);
+  --invest: #FF9800;
+  --text-1: #1f2329;
+  --text-2: #8f959e;
+  --text-3: #bdc2cb;
+  --bg: #f7f8fa;
+  --card: #FFF;
+  --border: #EDEDF0;
+  --sub-bg: #f7f8fa;
+  --row-hover: #fafafa;
+  --badge-blue: #3B63E1;
+  --badge-orange: #FF9800;
+  --card-normal: #f7f8fa;
+  --card-margin: #FFF7E6;
+  --font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Helvetica Neue", Helvetica, Arial, sans-serif;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+body {
+  font-family: var(--font-family);
+  background: #1a1a2e;
+  color: var(--text-1);
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 24px;
+  min-height: 100vh;
+  padding: 24px;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* ===== Demo Control Panel ===== */
+.demo-panel {
+  width: 220px;
+  flex-shrink: 0;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(20px);
+  border-radius: 16px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.08);
+  color: #fff;
+  position: sticky;
+  top: 24px;
+}
+.panel-title { font-size: 15px; font-weight: 700; margin-bottom: 4px; }
+.panel-subtitle { font-size: 11px; color: rgba(255,255,255,0.35); margin-bottom: 16px; }
+.panel-divider { height: 1px; background: rgba(255,255,255,0.08); margin: 12px 0; }
+.panel-section-title { font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.4); margin-bottom: 6px; }
+.demo-btn {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid rgba(255,255,255,0.1);
+  background: rgba(255,255,255,0.05);
+  color: rgba(255,255,255,0.7);
+  font-size: 12px;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 8px;
+  margin-bottom: 4px;
+  transition: all 0.15s;
+  font-family: var(--font-family);
+}
+.demo-btn:hover { background: rgba(255,255,255,0.12); border-color: rgba(255,255,255,0.2); color: #fff; }
+.demo-btn:active { transform: scale(0.98); }
+.demo-btn.active { background: var(--primary); border-color: var(--primary); color: #fff; font-weight: 600; }
+
+/* ===== App Shell ===== */
+.app-shell {
+  width: 100%;
+  max-width: 430px;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 100vh;
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(0,0,0,0.15);
+}
+
+/* ── 导航栏 ── */
+.nav-bar {
+  background: #fff;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 52px;
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: 0.5px;
+  position: relative;
+}
+.nav-back {
+  position: absolute; left: 8px; top: 0; bottom: 0;
+  width: 44px; display: flex; align-items: center; justify-content: center; cursor: pointer;
+  color: var(--text-1);
+}
+.nav-back i { font-size: 28px; }
+
+/* ── 主Tab（胶囊 + 底部三角箭头） ── */
+.tab-bar {
+  display: flex;
+  justify-content: center;
+  gap: 24px;
+  background: #fff;
+  padding: 8px 0 22px;
+}
+.tab-item {
+  position: relative;
+  text-align: center;
+  width: 150px;
+  padding: 8px 0;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-2);
+  cursor: pointer;
+  border-radius: 20px;
+  transition: all 0.25s;
+}
+.tab-item.active {
+  color: #fff;
+  background: var(--primary);
+  box-shadow: 0 4px 10px var(--primary-shadow);
+}
+.tab-item.active::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-left: 7px solid transparent;
+  border-right: 7px solid transparent;
+  border-top: 7px solid var(--primary);
+}
+
+/* ── 用户信息卡片 ── */
+.user-info {
+  margin: 0 16px 12px;
+  background: var(--card-normal);
+  border-radius: 8px;
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 15px;
+  transition: background 0.3s;
+}
+body.mode-margin .user-info { background: var(--card-margin); }
+
+.user-name { color: var(--text-1); font-weight: 500; }
+.user-account { color: var(--text-1); font-weight: 600; letter-spacing: 0.5px; }
+.user-tag {
+  margin-left: auto;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 2px 10px;
+  border-radius: 4px;
+  background: var(--badge-blue);
+  color: #fff;
+  transition: all 0.3s;
+}
+body.mode-margin .user-tag {
+  background: var(--badge-orange);
+  font-weight: 600;
+}
+
+/* ── 二级Tab（轻量下划线样式，等宽布局） ── */
+.sub-tab-bar {
+  display: none;
+  padding: 10px 16px 0;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+body.has-invest .sub-tab-bar { display: flex; }
+.sub-tab {
+  flex: 1;
+  text-align: center;
+  padding: 0 0 10px;
+  font-size: 13px;
+  color: var(--text-2);
+  cursor: pointer;
+  transition: all 0.2s;
+  user-select: none;
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+}
+.sub-tab.active {
+  color: var(--primary);
+  font-weight: 500;
+}
+.sub-tab.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 4em;
+  height: 2px;
+  background: var(--primary);
+  border-radius: 1px;
+}
+
+/* ── 列表区 ── */
+.tab-content { display: none; flex: 1; }
+.tab-content.active { display: flex; flex-direction: column; }
+.commission-list { flex: 1; padding: 0 16px 16px; }
+
+/* ── 面板 ── */
+.panel {
+  background: var(--card);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* ── 列标题 ── */
+.col-header, .col-header-inv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px 8px;
+  font-size: 13px;
+  color: var(--text-2);
+  font-weight: 400;
+}
+.col-rate { margin-right: 24px; }
+body.has-invest.sub-invest .col-header { display: none; }
+.col-header-inv { display: none; }
+body.has-invest.sub-invest .col-header-inv { display: flex; }
+
+/* ── 大类行 ── */
+.category-row {
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.category-row:last-child { border-bottom: none; }
+
+.category-main {
+  padding: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.category-main:active { background: var(--row-hover); }
+
+.cat-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.cat-name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-1);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+.cat-name .help-icon {
+  color: var(--text-3);
+  font-size: 16px;
+  opacity: 0.8;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* ── 费率显示 ── */
+.rate-display {
+  display: none;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-1);
+  text-align: right;
+}
+
+/* ── 紧凑模式费率 ── */
+.rate-single {
+  display: inline;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--text-1);
+  text-align: right;
+}
+.rate-single.hint,
+.rate-display.hint {
+  color: var(--primary);
+  font-size: 14px;
+  font-weight: 400;
+}
+.rate-display.inv { color: var(--text-1); }
+.rate-display.inv.hint { color: var(--primary); font-size: 14px; font-weight: 400; }
+
+/* ── 费率切换 ── */
+body.has-invest .rate-display { display: inline; }
+body.has-invest .rate-single { display: none; }
+
+body.sub-invest .rv-b { display: none !important; }
+body:not(.sub-invest) .rv-i { display: none !important; }
+body.sub-invest [data-no-invest] { display: none; }
+
+.cat-arrow {
+  color: var(--text-2);
+  font-size: 12px;
+  transition: transform 0.3s cubic-bezier(0.4,0,0.2,1);
+  user-select: none;
+  flex-shrink: 0;
+}
+.cat-arrow.expanded { transform: rotate(180deg); }
+
+/* ── 小类展开区 ── */
+.sub-list {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.35s cubic-bezier(0.4,0,0.2,1);
+}
+.sub-list.show { max-height: 1400px; }
+
+.sub-inner {
+  background: var(--sub-bg);
+  margin: 0 8px 8px;
+  border-radius: 8px;
+  padding: 0 14px;
+}
+
+.sub-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(0,0,0,0.03);
+}
+.sub-item:last-child { border-bottom: none; }
+
+.sub-name {
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.4;
+  flex: 1;
+  min-width: 0;
+  margin-right: 12px;
+}
+
+/* ── 小类费率 ── */
+.sub-rate-compact {
+  display: block;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+.sub-rate {
+  display: none;
+  flex-shrink: 0;
+  font-size: 14px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  color: var(--text-1);
+}
+.sub-rate.inv { color: var(--text-1); }
+
+body.has-invest .sub-rate { display: block; }
+body.has-invest .sub-rate-compact { display: none; }
+
+body.sub-invest .sr-b { display: none !important; }
+body:not(.sub-invest) .sr-i { display: none !important; }
+
+/* ── 说明弹窗 ── */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.4);
+  z-index: 1000;
+  justify-content: center;
+  align-items: center;
+}
+.modal-overlay.show { display: flex; }
+.modal-box {
+  background: #fff;
+  border-radius: 14px;
+  width: calc(100% - 64px);
+  max-width: 340px;
+  overflow: hidden;
+  animation: modalIn 0.2s ease-out;
+}
+@keyframes modalIn {
+  from { transform: scale(0.92); opacity: 0; }
+  to { transform: scale(1); opacity: 1; }
+}
+.modal-title {
+  padding: 18px 20px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-1);
+}
+.modal-body {
+  padding: 12px 20px 20px;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.8;
+}
+.modal-body ul { margin: 0; padding-left: 16px; }
+.modal-body li { margin-bottom: 2px; }
+.modal-btn {
+  display: block;
+  width: calc(100% - 40px);
+  margin: 0 20px 18px;
+  padding: 10px 0;
+  background: var(--primary);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 500;
+  text-align: center;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.modal-btn:active { opacity: 0.85; }
+
+/* ── 底部提示 ── */
+.tips {
+  background: var(--bg);
+  padding: 24px 20px 40px;
+  border-top-left-radius: 24px;
+  border-top-right-radius: 24px;
+  margin-top: auto;
+  font-size: 13px;
+  color: var(--text-2);
+  line-height: 1.6;
+}
+.tips-title {
+  color: var(--text-3);
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+.tips p { margin-bottom: 4px; }
+body.sub-invest .tips { display: none; }
+
+/* ── 响应式：小屏隐藏控制面板 ── */
+@media (max-width: 700px) {
+  body { padding: 0; background: #eff0f2; }
+  .demo-panel { display: none; }
+  .app-shell { border-radius: 0; min-height: 100vh; box-shadow: none; max-width: none; }
+}
+</style>
+</head>
+<body class="has-invest">
+
+<!-- Demo Control Panel -->
+<div class="demo-panel">
+  <div class="panel-title">佣金与服务费率查询</div>
+  <div class="panel-subtitle">V12 控制区联动</div>
+  <div class="panel-divider"></div>
+  <div class="panel-section-title">投顾状态</div>
+  <button class="demo-btn active" id="btn-subscribe" onclick="demoSubscribe()">已订阅投顾</button>
+  <button class="demo-btn" id="btn-unsubscribe" onclick="demoUnsubscribe()">未订阅投顾</button>
+</div>
+
+<div class="app-shell">
+
+  <div class="nav-bar">
+    <div class="nav-back">
+      <i class="ph ph-caret-left"></i>
+    </div>
+    佣金与服务费率查询
+  </div>
+
+  <div class="tab-bar">
+    <div class="tab-item active" data-tab="normal" onclick="switchTab('normal')">普通交易</div>
+    <div class="tab-item" data-tab="margin" onclick="switchTab('margin')">融资融券交易</div>
+  </div>
+
+  <div class="user-info">
+    <span class="user-name">戴*财</span>
+    <span class="user-account">1100*****75</span>
+    <span class="user-tag">普通</span>
+  </div>
+
+  <div class="sub-tab-bar">
+    <div class="sub-tab active" data-sub="base" onclick="switchSubTab('base')">标准手续费率</div>
+    <div class="sub-tab" data-sub="invest" onclick="switchSubTab('invest')">投顾服务费率</div>
+  </div>
+
+  <!-- ═══════ 普通交易 ═══════ -->
+  <div class="tab-content active" id="tab-normal">
+    <div class="commission-list">
+      <div class="panel" id="panel-normal"></div>
+    </div>
+  </div>
+
+  <!-- ═══════ 融资融券交易 ═══════ -->
+  <div class="tab-content" id="tab-margin">
+    <div class="commission-list">
+      <div class="panel" id="panel-margin"></div>
+    </div>
+  </div>
+
+  <div class="tips">
+    <div class="tips-title">提示：</div>
+    <p>1、净佣金不含单独向投资者收取并交于财政及监管机构的印花税、过户费、结算费等各类规费。</p>
+    <p>2、查询结果仅代表交易上述品种的收费标准，不代表已开通该品种的交易权限。</p>
+    <p>3、实际收取费用以交割单为准，如有疑问，请联系您的客户经理、在线客服或致电95536。</p>
+  </div>
+
+</div>
+
+<!-- 说明弹窗 -->
+<div class="modal-overlay" id="helpModal" onclick="closeHelp()">
+  <div class="modal-box" onclick="event.stopPropagation()">
+    <div class="modal-title" id="helpTitle"></div>
+    <div class="modal-body" id="helpBody"></div>
+    <button class="modal-btn" onclick="closeHelp()">我知道了</button>
+  </div>
+</div>
+
+<script>
+var DATA = {
+  normal: [
+    {
+      name: '沪深A股/场内基金',
+      help: '包含沪深两市主板A股、创业板A股、科创板A股，以及场内基金（ETF、LOF、普通场内基金）的买卖交易。',
+      subs: [
+        { name: '深市主板股票买卖', base: '0.12345678‰', invest: '0.25‰' },
+        { name: '创业板股票买卖', base: '0.00012345‰', invest: '0.25‰' },
+        { name: '沪市主板股票买卖', base: '0.12345678‰', invest: '0.25‰' },
+        { name: '科创板股票买卖', base: '0.00005678‰', invest: '0.25‰' },
+        { name: '深市基金普通买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '深市股票ETF买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '深市LOF买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '沪市基金普通买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '沪市主板股票要约收购/现金选择权', base: '0.8‰', invest: '0.25‰' }
+      ]
+    },
+    {
+      name: '港股通',
+      help: '通过沪港通及深港通渠道，买卖联交所上市的股票及ETF。',
+      subs: [
+        { name: '沪港通股票买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '沪港通ETF买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '深港通股票买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '深港通ETF买卖', base: '0.8‰', invest: '0.25‰' }
+      ]
+    },
+    {
+      name: '北交所股票',
+      help: '在北京证券交易所上市的股票、优先股的买卖及要约收购交易。',
+      subs: [
+        { name: '北交所股票买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '北交所优先股买卖', base: '0.8‰', invest: '0.25‰' },
+        { name: '北交所股票要约收购', base: '0.8‰', invest: '0.25‰' }
+      ]
+    },
+    {
+      name: '债券',
+      help: '包含沪深两市国债、企业债等债券的买卖及协议回购交易。',
+      subs: [
+        { name: '深市国债买卖', base: '0.8‰' },
+        { name: '深市国债协议回购', base: '0.8‰' },
+        { name: '沪市国债买卖', base: '0.8‰' },
+        { name: '沪市企业债买卖', base: '0.8‰' },
+        { name: '沪市国债协议回购', base: '0.8‰' }
+      ]
+    },
+    {
+      name: '深市可转债',
+      help: '在深圳证券交易所上市的可转换公司债券及定向可转换公司债券的买卖交易。',
+      subs: [
+        { name: '深市可转债买卖', base: '0.8‰' },
+        { name: '深市定向可转债买卖', base: '0.8‰' }
+      ]
+    },
+    {
+      name: '沪市可转债',
+      help: '在上海证券交易所上市的可转换公司债券及定向可转换公司债券的买卖交易。',
+      subs: [
+        { name: '沪市可转债买卖', base: '0.8‰' },
+        { name: '沪市定向可转债买卖', base: '0.8‰' }
+      ]
+    }
+  ],
+  margin: [
+    {
+      name: '沪深股票/基金（融资融券）',
+      help: '通过融资融券方式，对沪深两市主板A股、创业板、科创板及场内基金（ETF、LOF等）进行融资买入或融券卖出的交易。',
+      subs: [
+        { name: '深市主板股票融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '创业板融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '沪市主板股票融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '科创板融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '深市基金融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '深市股票ETF融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '深市LOF融资融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '沪市基金融券买卖', base: '0.8‰', invest: '0.3‰' },
+        { name: '沪市股票ETF融券买卖', base: '0.8‰', invest: '0.3‰' }
+      ]
+    },
+    {
+      name: '北交所股票（融资融券）',
+      help: '通过融资融券方式，对北京证券交易所上市股票进行融资买入或融券卖出的交易。',
+      subs: [
+        { name: '北交所融资融券买卖', base: '0.8‰', invest: '0.3‰' }
+      ]
+    }
+  ]
+};
+
+function helpIcon(name, help) {
+  var n = name.replace(/'/g, "\\'");
+  var h = help.replace(/'/g, "\\'");
+  return '<svg class="help-icon" viewBox="0 0 24 24" fill="none" style="width:16px;height:16px;flex-shrink:0;cursor:pointer;opacity:0.6" onclick="event.stopPropagation();showHelp(\'' + n + '\',\'' + h + '\')"><circle cx="12" cy="12" r="10" stroke="#8f959e" stroke-width="1.2"/><text x="12" y="17" text-anchor="middle" font-size="14" font-weight="600" fill="#8f959e" font-family="serif">?</text></svg>';
+}
+
+function renderPanel(categories) {
+  var html = '';
+
+  html += '<div class="col-header">';
+  html += '<span>分类</span>';
+  html += '<span class="col-rate">净佣金率</span>';
+  html += '</div>';
+
+  html += '<div class="col-header-inv">';
+  html += '<span>分类</span>';
+  html += '<span class="col-rate">投顾服务费率</span>';
+  html += '</div>';
+
+  categories.forEach(function(cat) {
+    var bases = cat.subs.map(function(s) { return s.base; });
+    var allBaseSame = bases.every(function(r) { return r === bases[0]; });
+    var hasInvest = cat.subs.some(function(s) { return s.invest; });
+    var invests = cat.subs.map(function(s) { return s.invest || '-'; });
+    var allInvestSame = invests.every(function(r) { return r === invests[0]; });
+
+    var noInvestAttr = hasInvest ? '' : ' data-no-invest';
+
+    var compactRate = allBaseSame ? bases[0] : '查看详情';
+    var compactCls = allBaseSame ? '' : ' hint';
+
+    var baseRate = allBaseSame ? bases[0] : '查看详情';
+    var baseCls = allBaseSame ? '' : ' hint';
+
+    var investRate = hasInvest ? (allInvestSame ? invests[0] : '查看详情') : '-';
+    var investCls = hasInvest ? ' inv' + (allInvestSame ? '' : ' hint') : '';
+
+    html += '<div class="category-row"' + noInvestAttr + '>';
+    html += '<div class="category-main" onclick="toggleSub(this)">';
+    html += '<div class="cat-top">';
+    html += '<span class="cat-name">' + cat.name + helpIcon(cat.name, cat.help) + '</span>';
+    html += '<span class="rate-single' + compactCls + '">' + compactRate + '</span>';
+    html += '<span class="rate-display rv-b' + baseCls + '">' + baseRate + '</span>';
+    html += '<span class="rate-display rv-i' + investCls + '">' + investRate + '</span>';
+    html += '<i class="ph ph-caret-down cat-arrow"></i>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="sub-list"><div class="sub-inner">';
+    cat.subs.forEach(function(sub) {
+      var invVal = sub.invest || '-';
+      var invCls = sub.invest ? ' inv' : '';
+      html += '<div class="sub-item">';
+      html += '<span class="sub-name">' + sub.name + '</span>';
+      html += '<span class="sub-rate-compact">' + sub.base + '</span>';
+      html += '<span class="sub-rate sr-b">' + sub.base + '</span>';
+      html += '<span class="sub-rate sr-i' + invCls + '">' + invVal + '</span>';
+      html += '</div>';
+    });
+    html += '</div></div>';
+    html += '</div>';
+  });
+
+  return html;
+}
+
+document.getElementById('panel-normal').innerHTML = renderPanel(DATA.normal);
+document.getElementById('panel-margin').innerHTML = renderPanel(DATA.margin);
+
+// ── 交互逻辑 ──
+
+function switchTab(tab) {
+  document.querySelectorAll('.tab-item').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelectorAll('.tab-content').forEach(function(c) { c.classList.remove('active'); });
+  document.querySelector('.tab-item[data-tab="' + tab + '"]').classList.add('active');
+  document.getElementById('tab-' + tab).classList.add('active');
+  document.body.classList.toggle('mode-margin', tab === 'margin');
+  document.querySelector('.user-tag').textContent = tab === 'margin' ? '信用' : '普通';
+  if (document.body.classList.contains('has-invest')) switchSubTab('base');
+  collapseAll();
+}
+
+function switchSubTab(sub) {
+  document.querySelectorAll('.sub-tab').forEach(function(t) { t.classList.remove('active'); });
+  document.querySelector('.sub-tab[data-sub="' + sub + '"]').classList.add('active');
+  document.body.classList.toggle('sub-invest', sub === 'invest');
+  collapseAll();
+}
+
+function toggleSub(el) {
+  var row = el.closest('.category-row');
+  var sub = row.querySelector('.sub-list');
+  var arrow = el.querySelector('.cat-arrow');
+  sub.classList.toggle('show');
+  arrow.classList.toggle('expanded');
+}
+
+function collapseAll() {
+  document.querySelectorAll('.sub-list.show').forEach(function(s) { s.classList.remove('show'); });
+  document.querySelectorAll('.cat-arrow.expanded').forEach(function(a) { a.classList.remove('expanded'); });
+}
+
+function showHelp(title, content) {
+  document.getElementById('helpTitle').textContent = title;
+  document.getElementById('helpBody').innerHTML = content;
+  document.getElementById('helpModal').classList.add('show');
+}
+
+function closeHelp() {
+  document.getElementById('helpModal').classList.remove('show');
+}
+
+// ── Demo 控制面板 ──
+
+function updateDemoBtns(activeId) {
+  document.querySelectorAll('.demo-btn').forEach(function(b) { b.classList.remove('active'); });
+  document.getElementById(activeId).classList.add('active');
+}
+
+function demoSubscribe() {
+  document.body.classList.add('has-invest');
+  switchSubTab('base');
+  collapseAll();
+  updateDemoBtns('btn-subscribe');
+}
+
+function demoUnsubscribe() {
+  document.body.classList.remove('has-invest', 'sub-invest');
+  collapseAll();
+  updateDemoBtns('btn-unsubscribe');
+}
+</script>
+</body>
+</html>
