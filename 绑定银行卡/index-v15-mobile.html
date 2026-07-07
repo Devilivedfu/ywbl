@@ -1,0 +1,1378 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>绑定银行卡 - V15 跳转中行页面 短信验证+选卡</title>
+    <style>
+        :root {
+            /* 主色 - 公司规范固定值 */
+            --color-primary: #2F569E;
+            --color-primary-dark: #244582;
+            --color-accent: #FF8000;
+
+            /* 中行品牌色（跳转中国银行页面专用，规范§9 允许银行品牌色作为辨识符号） */
+            --boc-red: #B01C21;
+            --boc-red-dark: #8E1620;
+            --boc-bg: #F2F2F2;
+            --boc-text: #1A1A1A;
+            --boc-text-sub: #888888;
+            --boc-border: #EEEEEE;
+
+            /* 文字色 - 公司规范 */
+            --text-primary: #212634;
+            --text-secondary: #677288;
+            --text-tertiary: #939AAA;
+            --text-placeholder: #D4D7DD;
+
+            /* 背景色 */
+            --bg-page: #F4F5F6;
+            --bg-card: #FFFFFF;
+            --bg-white: #FFFFFF;
+            --bg-disabled: #B4B9C4;
+
+            /* 边框/分割 */
+            --border-color: #DFE1E6;
+
+            /* 圆角阶次 */
+            --radius-sm: 8px;
+            --radius-md: 16px;
+            --radius-lg: 24px;
+
+            /* 字体 */
+            --font: -apple-system, BlinkMacSystemFont, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+            --font-num: 'DIN Alternate', -apple-system, sans-serif;
+            --font-mono: 'SF Mono', Monaco, monospace;
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body { font-family: var(--font); background: #0a0a0a; color: var(--text-primary); margin: 0; padding: 0; min-height: 100vh; }
+        /* 视口高度计算：减去 body padding 48px，避免 .app-frame 溢出导致吸底被裁切 */
+        /* 小视口下（<700px 高）减小 body padding，给手机界面更多空间 */
+
+        /* ===== Demo Control Panel（控制台区域，允许 hover） ===== */
+
+        /* ===== App Frame（手机界面区域，禁止 hover） ===== */
+        .app-frame {
+            width: 100%; max-width: 430px; background: var(--bg-page);
+            margin: 0 auto;
+            height: 100vh;       /* 兼容旧浏览器 */
+            height: 100dvh;      /* iOS 15.4+ 动态视口，解决地址栏遮挡 */
+            position: relative; display: flex; flex-direction: column;
+            overflow: hidden;    /* 让 main-content 内部滚动，footer 锁底 */
+        }
+        /* 视口矮于 700px 时，压缩 body padding 防止吸底被裁切 */
+        @media (max-height: 700px) {
+            body { padding: 12px; }
+            .app-frame { height: calc(100vh - 24px); }
+        }
+
+        /* ===== Nav Header（公司规范：高 50px、标题 18px #212634、底部 1px 分割线、返回按钮永远 #2F569E） ===== */
+        .nav-header {
+            height: 50px; display: flex; align-items: center; justify-content: space-between;
+            padding: 0 8px; background: var(--bg-white); position: relative; top: 0; z-index: 100;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .nav-side { width: 50px; display: flex; align-items: center; justify-content: center; }
+        .nav-title {
+            flex: 1; text-align: center;
+            font-size: 18px; font-weight: 600;
+            color: var(--text-primary);
+            height: 50px; display: flex; align-items: center; justify-content: center;
+        }
+        .back-btn {
+            position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
+            width: 40px; height: 40px;
+            display: flex; align-items: center; justify-content: center;
+            cursor: pointer; background: transparent; border: none; padding: 0;
+            color: var(--color-primary); /* 公司规范：返回按钮永远品牌蓝 */
+            /* left:6 + SVG 容器居中偏移 9 + SVG 内 chevron 线条偏移 8.25 ≈ 23.25px，与"选"字左边 23px 对齐 */
+        }
+        .back-btn svg {
+            width: 22px; height: 22px;
+            stroke: currentColor; stroke-width: 1.8;
+            fill: none; stroke-linecap: round; stroke-linejoin: round;
+        }
+
+        /* ===== Progress ===== */
+        .progress-bar { display: flex; gap: 6px; padding: 14px 23px; background: var(--bg-white); }
+        .progress-step { height: 3px; flex: 1; background: var(--border-color); border-radius: 2px; }
+        .progress-step.done { background: var(--color-primary); }
+        .progress-step.current { background: var(--color-primary); opacity: 0.5; }
+
+        /* ===== Main Content ===== */
+        /* flex:1 撑满 header/progress 与吸底之间的空间，吸底始终紧贴底部不会有大留白 */
+        .main-content { flex: 1; overflow-y: auto; padding-bottom: 39px; background: var(--bg-page); }
+        .info-block { padding: 4px 23px 20px; }
+        .info-title { font-size: 18px; font-weight: 600; margin-bottom: 6px; color: var(--text-primary); }
+        .info-desc { font-size: 13px; color: var(--text-tertiary); line-height: 1.6; }
+
+        /* ===== Form ===== */
+        .form-block { padding: 0 23px; background: var(--bg-white); }
+        .form-row {
+            display: flex; align-items: center; height: 52px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .form-row:last-child { border-bottom: none; }
+        .form-label { font-size: 16px; color: var(--text-secondary); width: 50px; flex-shrink: 0; }
+        .form-label.form-label-long { width: auto; white-space: nowrap; padding-right: 12px; }
+        .form-input {
+            flex: 1; border: none; outline: none; font-size: 16px; color: var(--text-primary);
+            background: transparent; height: 100%; font-family: var(--font);
+        }
+        .form-input::placeholder { color: var(--text-placeholder); }
+        .scan-icon {
+            width: 36px; height: 36px; display: flex; align-items: center; justify-content: center;
+            color: var(--text-tertiary); cursor: pointer; flex-shrink: 0;
+        }
+        .scan-icon svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .form-arrow { color: var(--text-placeholder); flex-shrink: 0; display: flex; align-items: center; }
+        .form-arrow svg { width: 18px; height: 18px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .bank-display {
+            flex: 1; display: flex; align-items: center; gap: 8px; height: 100%; cursor: pointer;
+        }
+        .bank-display-logo {
+            width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 10px; color: #fff; font-weight: 700; flex-shrink: 0;
+        }
+        .bank-display-name { font-size: 16px; color: var(--text-primary); }
+        .bank-display-placeholder { font-size: 16px; color: var(--text-placeholder); }
+
+        /* ===== V12: 开卡证件类型行 ===== */
+        .card-type-row { display: none; cursor: pointer; }
+        .card-type-row.show { display: flex; }
+        .card-type-display {
+            flex: 1; display: flex; align-items: center; height: 100%;
+            font-size: 16px; color: var(--text-primary);
+        }
+
+        /* ===== V13: 中国银行签约提示 ===== */
+        .bank-hint {
+            display: none;
+            padding: 12px 0 14px;
+            font-size: 16px;
+            color: var(--text-primary);
+            line-height: 1.6;
+            border-top: 1px solid var(--border-color);
+        }
+        .bank-hint.show { display: block; }
+
+        /* ===== V13: 免卡输入卡号 - 清空按钮（与扫码图标并列） ===== */
+        .card-clear-btn {
+            width: 36px; height: 36px;
+            display: none;
+            align-items: center; justify-content: center;
+            color: var(--text-tertiary); cursor: pointer; flex-shrink: 0;
+        }
+        .card-clear-btn.show { display: flex; }
+        .card-clear-btn:active { opacity: 0.6; }
+        .card-clear-btn svg { width: 20px; height: 20px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* ===== 半屏选择器选项 ===== */
+        .picker-option {
+            display: flex; align-items: center; gap: 12px; padding: 16px;
+            background: var(--bg-page); border-radius: var(--radius-sm); margin-bottom: 10px;
+            cursor: pointer; border: 2px solid transparent;
+        }
+        .picker-option.selected { border-color: var(--color-primary); background: #EEF3FF; }
+        .picker-radio {
+            width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--text-placeholder);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .picker-option.selected .picker-radio { border-color: var(--color-primary); }
+        .picker-option.selected .picker-radio::after {
+            content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--color-primary);
+        }
+        .picker-info { flex: 1; }
+        .picker-label { font-size: 16px; font-weight: 500; color: var(--text-primary); }
+
+        /* ===== CTA fallback button ===== */
+        .cta-auto-query {
+            margin: 16px 23px 0; padding: 14px 20px;
+            background: var(--color-primary); color: #fff;
+            border-radius: var(--radius-md); cursor: pointer;
+            display: none; align-items: center; justify-content: space-between;
+            gap: 12px; box-shadow: 0 4px 16px rgba(47,86,158,0.25);
+        }
+        .cta-auto-query.show {
+            display: flex;
+            animation: ctaAppear 0.3s ease-out;
+        }
+        .cta-auto-query:active { background: var(--color-primary-dark); transform: scale(0.98); }
+        @keyframes ctaAppear {
+            from { opacity: 0; transform: translateY(6px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .cta-left { display: flex; align-items: center; gap: 12px; }
+        .cta-icon {
+            width: 36px; height: 36px; background: rgba(255,255,255,0.2); border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .cta-icon svg { width: 20px; height: 20px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .cta-text-main { font-size: 16px; font-weight: 600; margin-bottom: 2px; }
+        .cta-text-sub { font-size: 12px; opacity: 0.8; line-height: 1.4; }
+        .cta-arrow svg { width: 20px; height: 20px; opacity: 0.7; stroke: currentColor; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* ===== Bank Grid ===== */
+        .bank-block { margin-top: 14px; padding: 20px 23px; background: var(--bg-white); }
+        .bank-block-header {
+            display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px;
+        }
+        .bank-block-title { font-size: 16px; font-weight: 600; color: var(--text-primary); }
+        .bank-block-link { font-size: 13px; color: var(--color-primary); cursor: pointer; }
+        .bank-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 12px; }
+        .bank-item {
+            display: flex; align-items: center; gap: 8px; cursor: pointer;
+            padding: 6px 0;
+        }
+        .bank-item:active { opacity: 0.6; }
+        .bank-item.selected .bi-name { color: var(--color-primary); font-weight: 600; }
+        .bi-logo {
+            width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 11px; color: #fff; font-weight: 700; flex-shrink: 0;
+        }
+        .bi-name { font-size: 13px; color: var(--text-primary); white-space: nowrap; }
+        .bi-tag {
+            font-size: 10px; color: var(--color-primary); background: #EEF3FF;
+            padding: 1px 6px; border-radius: 8px; white-space: nowrap; font-weight: 500;
+            margin-left: -4px;
+        }
+        .bi-tag.muted { color: var(--text-tertiary); background: var(--bg-page); }
+
+        /* ===== Footer（吸底 - 公司规范：1px 分割线、不要 box-shadow、按钮 52 高 / 8 圆角 / 17 字号） ===== */
+        /* 用 flex-shrink:0 而不是 sticky/fixed，让吸底在 .app-frame flex 列里自然贴底，避免上方留白 */
+        .footer-area {
+            background: var(--bg-white);
+            border-top: 1px solid var(--border-color);
+            padding: 3px 23px calc(39px + env(safe-area-inset-bottom));
+            flex-shrink: 0;
+            z-index: 50;
+        }
+        .agree-row {
+            display: flex; align-items: center; min-height: 40px;
+            margin-bottom: 5px; font-size: 16px;
+            color: var(--text-tertiary); cursor: pointer; gap: 8px;
+        }
+        .checkbox-box {
+            width: 28px; height: 28px; flex-shrink: 0;
+            background-size: contain; background-repeat: no-repeat; background-position: center;
+            background-image: url("data:image/png;base64,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");
+        }
+        .agree-row.checked .checkbox-box {
+            background-image: url("data:image/png;base64,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");
+        }
+        .agree-row .agree-text { line-height: 1.4; }
+        .link { color: var(--color-primary); }
+        .btn-next {
+            width: 100%; height: 52px; background: var(--color-primary); color: #fff; border: none;
+            border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer;
+            font-family: var(--font);
+        }
+        .btn-next:active { background: var(--color-primary-dark); opacity: 0.9; }
+
+        /* ===== Half-Screen Overlay（公司规范：弹窗圆角 24px） ===== */
+        .overlay {
+            position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+            z-index: 200; display: none; flex-direction: column; justify-content: flex-end;
+        }
+        .overlay.show { display: flex; }
+        .overlay-mask {
+            position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.45); z-index: 199;
+            opacity: 0; transition: opacity 0.3s;
+        }
+        .overlay-mask.show { opacity: 1; }
+        .overlay-content {
+            background: var(--bg-white); border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+            max-height: 75vh; display: flex; flex-direction: column;
+            animation: slideUp 0.3s ease-out; position: relative; z-index: 201;
+        }
+        @keyframes slideUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+
+        .overlay-header {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 20px 14px 0 20px; flex-shrink: 0; position: relative;
+        }
+        .overlay-title { font-size: 17px; font-weight: 600; color: var(--text-primary); }
+        .overlay-close {
+            width: 30px; height: 30px;
+            display: flex; align-items: center; justify-content: center; cursor: pointer;
+            border: none; padding: 0; background: transparent;
+        }
+        .overlay-close img { width: 18px; height: 18px; display: block; }
+        .overlay-body { padding: 16px 20px 28px; overflow-y: auto; flex: 1; }
+
+        /* ===== V9: Auth Consent Overlay（双按钮组合：强引导蓝底 + 弱引导蓝边框，公司规范） ===== */
+        .consent-header {
+            padding: 24px 20px 0; text-align: center; flex-shrink: 0;
+        }
+        .consent-icon {
+            width: 52px; height: 52px; background: #EEF3FF; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
+        }
+        .consent-icon svg { width: 26px; height: 26px; fill: none; stroke: var(--color-primary); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .consent-title { font-size: 17px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+        .consent-body { padding: 20px; }
+        .consent-statement {
+            background: var(--bg-page); border-radius: var(--radius-md); padding: 16px;
+            font-size: 14px; line-height: 1.8; color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        .consent-statement strong { color: var(--text-primary); }
+        .consent-link {
+            color: var(--color-primary); cursor: pointer; font-weight: 500;
+        }
+        .consent-buttons {
+            display: flex; gap: 14px; margin-top: 4px;
+        }
+        .btn-cancel {
+            flex: 1; height: 52px; background: transparent;
+            border: 2px solid var(--color-primary); color: var(--color-primary);
+            border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer;
+            font-family: var(--font);
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-cancel:active { background: #EEF3FF; }
+        .btn-confirm-auth {
+            flex: 1; height: 52px; background: var(--color-primary); color: #fff; border: none;
+            border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer;
+            font-family: var(--font);
+        }
+        .btn-confirm-auth:active { background: var(--color-primary-dark); opacity: 0.9; }
+        .consent-tip {
+            font-size: 11px; color: var(--text-tertiary); text-align: center;
+            margin-top: 12px; line-height: 1.5; padding-bottom: 20px;
+        }
+
+        /* ===== V15: 授权弹层 - 跳转离开 App 提示段 ===== */
+        .consent-notice {
+            display: flex; gap: 8px; align-items: flex-start;
+            background: #FFF7F0; border-left: 3px solid var(--color-accent);
+            border-radius: var(--radius-sm); padding: 12px 14px;
+            font-size: 13px; line-height: 1.6; color: var(--text-secondary);
+            margin-bottom: 16px;
+        }
+        .consent-notice .notice-icon {
+            flex-shrink: 0; width: 16px; height: 16px; margin-top: 2px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--color-accent);
+        }
+        .consent-notice .notice-icon svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+        /* ===== V15: 中国银行全屏页（跳转中行页面，中行红主题；class 一律 boc- 前缀，避开 polish 强制变蓝） ===== */
+        .boc-page {
+            position: absolute; top: 0; bottom: 0; left: 0; right: 0;
+            z-index: 300; background: var(--boc-bg);
+            display: none; flex-direction: column; overflow: hidden;
+        }
+        .boc-page.show { display: flex; animation: bocFadeIn 0.25s ease-out; }
+        @keyframes bocFadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .boc-header {
+            height: 50px; background: var(--bg-white); position: relative; z-index: 10;
+            display: flex; align-items: center; justify-content: center;
+            border-bottom: 1px solid var(--boc-border); flex-shrink: 0;
+        }
+        .boc-back {
+            position: absolute; left: 6px; top: 50%; transform: translateY(-50%);
+            width: 40px; height: 40px; display: flex; align-items: center; justify-content: center;
+            background: transparent; border: none; padding: 0; cursor: pointer;
+            color: #333333; /* 中行页返回箭头用深灰，匹配参考图（规范§9：按原图） */
+        }
+        .boc-back svg { width: 22px; height: 22px; stroke: currentColor; stroke-width: 1.8; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+        .boc-title {
+            font-size: 17px; font-weight: 600; color: var(--boc-text);
+            height: 50px; display: flex; align-items: center; justify-content: center;
+        }
+
+        .boc-main { flex: 1; overflow-y: auto; }
+
+        /* 中行品牌区 */
+        .boc-brand {
+            display: flex; flex-direction: column; align-items: center;
+            padding: 40px 0 28px; gap: 10px;
+        }
+        .boc-logo-circle {
+            width: 56px; height: 56px; border-radius: 50%; background: var(--boc-red);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 30px; font-weight: 700; font-family: "STKaiti", "KaiTi", serif;
+            line-height: 1;
+        }
+        .boc-bank-name { font-size: 18px; font-weight: 700; color: var(--boc-text); letter-spacing: 1px; }
+        .boc-bank-en { font-size: 11px; color: var(--boc-text-sub); letter-spacing: 1.5px; text-transform: uppercase; }
+        .boc-subtitle { font-size: 14px; color: var(--boc-text-sub); padding: 0 23px 16px; }
+
+        /* 中行表单卡（短信验证页） */
+        .boc-form-card {
+            background: var(--bg-white); border-radius: var(--radius-sm); margin: 0 16px;
+            padding: 0 16px;
+        }
+        .boc-form-row {
+            display: flex; align-items: center; min-height: 52px;
+            border-bottom: 1px solid var(--boc-border);
+        }
+        .boc-form-row:last-child { border-bottom: none; }
+        .boc-form-label { font-size: 15px; color: var(--boc-text); width: 64px; flex-shrink: 0; }
+        .boc-form-value { flex: 1; font-size: 16px; color: var(--boc-text); }
+        .boc-form-input {
+            flex: 1; border: none; outline: none; font-size: 16px; color: var(--boc-text);
+            background: transparent; height: 100%; font-family: var(--font); min-width: 0;
+        }
+        .boc-form-input::placeholder { color: var(--text-placeholder); }
+        .boc-getcode {
+            flex-shrink: 0; border: none; background: transparent; cursor: pointer;
+            font-size: 14px; color: var(--boc-red); font-weight: 500; font-family: var(--font);
+            padding: 6px 0 6px 12px; white-space: nowrap;
+        }
+        .boc-getcode[disabled] { color: var(--boc-text-sub); cursor: not-allowed; }
+
+        /* 中行选卡列表 */
+        .boc-card-list { background: var(--bg-white); margin: 0 16px; border-radius: var(--radius-sm); overflow: hidden; }
+        .boc-card-item {
+            display: flex; align-items: center; gap: 12px; padding: 18px 16px;
+            border-bottom: 1px solid var(--boc-border); cursor: pointer;
+        }
+        .boc-card-item:last-child { border-bottom: none; }
+        .boc-card-item:active { background: #FAFAFA; }
+        .boc-card-logo {
+            width: 32px; height: 32px; border-radius: 50%; background: var(--boc-red);
+            display: flex; align-items: center; justify-content: center;
+            color: #fff; font-size: 16px; font-weight: 700; flex-shrink: 0; font-family: "STKaiti", "KaiTi", serif;
+        }
+        .boc-card-info { flex: 1; min-width: 0; }
+        .boc-card-number {
+            font-size: 17px; font-weight: 600; color: var(--boc-text);
+            letter-spacing: 1px; font-family: var(--font-mono);
+        }
+        .boc-card-type { font-size: 13px; color: var(--boc-text-sub); margin-top: 3px; }
+        .boc-radio {
+            width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--text-placeholder);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .boc-card-item.selected .boc-radio { border-color: var(--boc-red); }
+        .boc-card-item.selected .boc-radio::after {
+            content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--boc-red);
+        }
+
+        /* ===== V15: 中行页面内未查到账户 - 居中弹窗（已跳转至中行页面，弹窗不再重复 logo） ===== */
+        .overlay--center { justify-content: center; align-items: center; z-index: 400; /* 盖在中行全屏页(z-300)之上 */ }
+        .modal-box {
+            position: relative; z-index: 201;
+            width: calc(100% - 92px); max-width: 315px;
+            background: var(--bg-white); border-radius: var(--radius-lg); /* 24px */
+            overflow: hidden; animation: modalIn 0.2s ease-out;
+        }
+        @keyframes modalIn { from { opacity: 0; transform: scale(0.96); } to { opacity: 1; transform: scale(1); } }
+        .modal-body-text { padding: 28px 23px 24px; font-size: 16px; line-height: 1.7; color: var(--text-primary); }
+        .modal-btn {
+            display: block; width: calc(100% - 46px); margin: 0 auto 20px;
+            height: 52px; background: var(--boc-red); color: #fff; border: none;
+            border-radius: var(--radius-sm); font-size: 17px; font-weight: 600;
+            font-family: var(--font); cursor: pointer;
+        }
+        .modal-btn:active { background: var(--boc-red-dark); opacity: 0.95; }
+
+        /* 中行页吸底（真吸底 flex 布局，主按钮中行红） */
+        .boc-footer {
+            background: var(--bg-white); border-top: 1px solid var(--boc-border);
+            padding: 3px 23px 39px; flex-shrink: 0;
+        }
+        .boc-btn {
+            width: 100%; height: 52px; background: var(--boc-red); color: #fff; border: none;
+            border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer;
+            font-family: var(--font);
+        }
+        .boc-btn:active { background: var(--boc-red-dark); opacity: 0.95; }
+
+        /* ===== Loading Overlay（保留 V11 半屏弹起；旋转圈颜色改品牌蓝，待公司规范补充） ===== */
+        .loading-wrap { padding: 48px 20px; text-align: center; }
+        .loading-spinner {
+            width: 40px; height: 40px;
+            border: 3px solid var(--border-color);
+            border-top-color: var(--color-primary); /* 公司品牌蓝（V11 用 primary，此处对齐） */
+            border-radius: 50%; margin: 0 auto 16px;
+            animation: loadingSpin 0.8s linear infinite;
+        }
+        @keyframes loadingSpin { to { transform: rotate(360deg); } }
+        .loading-text { font-size: 15px; color: var(--text-primary); font-weight: 500; }
+        .loading-sub { font-size: 13px; color: var(--text-tertiary); margin-top: 6px; }
+
+        /* ===== Result: Card List ===== */
+        .result-subtitle { font-size: 13px; color: var(--text-tertiary); margin-bottom: 16px; }
+        .result-subtitle .num { color: var(--color-accent); }
+        .card-option {
+            display: flex; align-items: center; gap: 12px; padding: 16px;
+            background: var(--bg-page); border-radius: var(--radius-sm); margin-bottom: 10px;
+            cursor: pointer; border: 2px solid transparent;
+        }
+        .card-option.selected { border-color: var(--color-primary); background: #EEF3FF; }
+        .card-radio {
+            width: 20px; height: 20px; border-radius: 50%; border: 2px solid var(--text-placeholder);
+            display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+        }
+        .card-option.selected .card-radio { border-color: var(--color-primary); }
+        .card-option.selected .card-radio::after {
+            content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--color-primary);
+        }
+        .card-info { flex: 1; }
+        .card-number { font-size: 17px; font-weight: 600; letter-spacing: 1px; color: var(--text-primary); font-family: var(--font-mono); }
+        .card-bank { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+        .btn-confirm {
+            width: 100%; height: 52px; background: var(--color-primary); color: #fff; border: none;
+            border-radius: var(--radius-sm); font-size: 17px; font-weight: 600; cursor: pointer;
+            margin-top: 8px; font-family: var(--font);
+        }
+        .btn-confirm:active { opacity: 0.9; }
+        .btn-manual {
+            width: 100%; height: 44px; background: none; border: none; color: var(--color-primary);
+            font-size: 15px; cursor: pointer; margin-top: 4px; font-family: var(--font);
+        }
+        .result-disclaimer {
+            font-size: 11px; color: var(--text-tertiary); text-align: center; margin-top: 12px; line-height: 1.6; padding-bottom: 20px;
+        }
+
+        /* ===== Result: Single Card ===== */
+        .single-card-display {
+            background: linear-gradient(135deg, #B01C21 0%, #D43138 100%);
+            border-radius: var(--radius-md); padding: 20px; color: #fff; margin-bottom: 16px;
+        }
+        .single-card-bank { font-size: 14px; opacity: 0.8; margin-bottom: 16px; }
+        .single-card-number {
+            font-size: 22px; font-weight: 600; letter-spacing: 2px;
+            font-family: var(--font-mono);
+        }
+
+        /* ===== Result: Failure ===== */
+        .fail-wrap { text-align: center; padding: 20px 0 8px; }
+        .fail-icon {
+            width: 56px; height: 56px; background: #FFF3E8; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center; margin: 0 auto 14px;
+        }
+        .fail-icon svg { width: 28px; height: 28px; fill: none; stroke: var(--color-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+        .fail-title { font-size: 17px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+        .fail-desc { font-size: 13px; color: var(--text-tertiary); margin-bottom: 20px; line-height: 1.6; }
+        .btn-retry {
+            width: 100%; height: 44px; background: none; border: 1px solid var(--border-color);
+            border-radius: var(--radius-sm); font-size: 15px; color: var(--text-secondary); cursor: pointer;
+            margin-top: 6px; font-family: var(--font);
+        }
+
+        /* ===== Selected Bank in Form ===== */
+        .bank-selected { display: flex; align-items: center; gap: 8px; flex: 1; }
+        .bank-selected-logo {
+            width: 24px; height: 24px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-size: 10px; color: #fff;
+            font-weight: 700; flex-shrink: 0;
+        }
+        .bank-selected-name { font-size: 16px; color: var(--text-primary); }
+
+    </style>
+</head>
+<body>
+
+<!-- App Frame（手机界面区域） -->
+<div class="app-frame">
+
+    <!-- Nav -->
+    <header class="nav-header">
+        <div class="nav-side">
+            <button class="back-btn" aria-label="返回">
+                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+        </div>
+        <div class="nav-title">绑定银行卡</div>
+        <div class="nav-side"></div>
+    </header>
+
+    <!-- Progress -->
+    <div class="progress-bar">
+        <div class="progress-step done"></div>
+        <div class="progress-step done"></div>
+        <div class="progress-step done"></div>
+        <div class="progress-step current"></div>
+        <div class="progress-step"></div>
+    </div>
+
+    <!-- Main -->
+    <main class="main-content">
+
+        <div class="info-block">
+            <div class="info-title">选择1张银行卡绑定</div>
+            <div class="info-desc">开户后用于转入资金交易和资金安全存管，请使用一类借记卡（非信用卡）。</div>
+        </div>
+
+        <!-- Form -->
+        <div class="form-block">
+            <div class="form-row">
+                <label class="form-label">卡号</label>
+                <input type="text" class="form-input" id="cardInput" placeholder="请输入银行卡号" maxlength="23">
+                <div class="card-clear-btn" id="cardClearBtn" onclick="clearCardInput()" title="清空">
+                    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><line x1="15" y1="9" x2="9" y2="15"></line><line x1="9" y1="9" x2="15" y2="15"></line></svg>
+                </div>
+                <div class="scan-icon" id="scanIcon" title="扫码输卡号">
+                    <svg viewBox="0 0 24 24"><path d="M1 4V1h3"/><path d="M20 1h3v3"/><path d="M1 20v3h3"/><path d="M20 23h3v-3"/><line x1="4" y1="12" x2="20" y2="12"/></svg>
+                </div>
+            </div>
+            <div class="form-row" id="bankRow" onclick="handleBankRowClick()">
+                <label class="form-label">银行</label>
+                <div id="bankDisplay" class="bank-display">
+                    <span class="bank-display-placeholder">输入卡号自动匹配</span>
+                </div>
+                <div class="form-arrow">
+                    <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </div>
+            <!-- V13: 中国银行签约提示 (仅中国银行选中时显示) -->
+            <div class="bank-hint" id="bankHint">请确认签约中国银行卡已开通电话银行，并已设置电话银行密码。</div>
+            <!-- V12: 开卡证件类型 (仅港澳台客户显示，点击弹半屏选择) -->
+            <div class="form-row card-type-row" id="idCardTypeRow" onclick="openCardTypePicker()">
+                <label class="form-label form-label-long">银行卡开卡证件类型</label>
+                <div id="cardTypeDisplay" class="card-type-display">
+                    <span>通行证</span>
+                </div>
+                <div class="form-arrow">
+                    <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- CTA fallback button -->
+        <div class="cta-auto-query" id="ctaAutoQuery" onclick="handleCTAClick()">
+            <div class="cta-left">
+                <div class="cta-icon">
+                    <svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-6.219-8.56"></path><polyline points="21 3 21 9 15 9"></polyline></svg>
+                </div>
+                <div>
+                    <div class="cta-text-main">免输卡号，查询中国银行卡</div>
+                    <div class="cta-text-sub">授权后自动查询，信息安全由中国银行保障</div>
+                </div>
+            </div>
+            <div class="cta-arrow">
+                <svg viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </div>
+        </div>
+
+        <!-- Bank Grid -->
+        <div class="bank-block">
+            <div class="bank-block-header">
+                <span class="bank-block-title">支持绑定的银行</span>
+                <span class="bank-block-link">忘记卡号怎么办？</span>
+            </div>
+            <div class="bank-grid" id="bankGrid">
+                <!-- Row 1 -->
+                <div class="bank-item" data-bank="工商银行" data-color="#C03A2B" data-abbr="工" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#C03A2B">工</div><span class="bi-name">工商银行</span>
+                </div>
+                <div class="bank-item" data-bank="建设银行" data-color="#00539F" data-abbr="建" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#00539F">建</div><span class="bi-name">建设银行</span>
+                </div>
+                <div class="bank-item" data-bank="招商银行" data-color="#E60012" data-abbr="招" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#E60012">招</div><span class="bi-name">招商银行</span>
+                </div>
+                <!-- Row 2 -->
+                <div class="bank-item" data-bank="交通银行" data-color="#003A70" data-abbr="交" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#003A70">交</div><span class="bi-name">交通银行</span>
+                </div>
+                <div class="bank-item boc-item" data-bank="中国银行" data-color="#B01C21" data-abbr="中" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#B01C21">中</div><span class="bi-name">中国银行</span><span class="bi-tag">免输卡号</span>
+                </div>
+                <div class="bank-item" data-bank="农业银行" data-color="#00965E" data-abbr="农" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#00965E">农</div><span class="bi-name">农业银行</span>
+                </div>
+                <!-- Row 3 -->
+                <div class="bank-item" data-bank="浦发银行" data-color="#1E4B9E" data-abbr="浦" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#1E4B9E">浦</div><span class="bi-name">浦发银行</span>
+                </div>
+                <div class="bank-item" data-bank="兴业银行" data-color="#003686" data-abbr="兴" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#003686">兴</div><span class="bi-name">兴业银行</span>
+                </div>
+                <div class="bank-item" data-bank="光大银行" data-color="#8B2F89" data-abbr="光" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#8B2F89">光</div><span class="bi-name">光大银行</span>
+                </div>
+                <!-- Row 4 -->
+                <div class="bank-item" data-bank="广发银行" data-color="#CF0A2C" data-abbr="广" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#CF0A2C">广</div><span class="bi-name">广发银行</span>
+                </div>
+                <div class="bank-item" data-bank="平安银行" data-color="#FF6600" data-abbr="平" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#FF6600">平</div><span class="bi-name">平安银行</span>
+                </div>
+                <div class="bank-item" data-bank="邮储银行" data-color="#00853D" data-abbr="邮" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#00853D">邮</div><span class="bi-name">邮储银行</span>
+                </div>
+                <!-- Row 5 -->
+                <div class="bank-item" data-bank="中信银行" data-color="#CD1633" data-abbr="中" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#CD1633">中</div><span class="bi-name">中信银行</span>
+                </div>
+                <div class="bank-item" data-bank="民生银行" data-color="#25AD8C" data-abbr="民" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#25AD8C">民</div><span class="bi-name">民生银行</span>
+                </div>
+                <div class="bank-item" data-bank="华夏银行" data-color="#CC0000" data-abbr="华" onclick="selectBank(this)">
+                    <div class="bi-logo" style="background:#CC0000">华</div><span class="bi-name">华夏银行</span>
+                </div>
+            </div>
+        </div>
+
+    </main>
+
+    <!-- Footer（吸底） -->
+    <div class="footer-area">
+        <div class="agree-row checked" id="agreeRow" onclick="toggleAgree()">
+            <div class="checkbox-box"></div>
+            <span class="agree-text">我已阅读并同意签署 <span class="link">《全部开户协议》</span></span>
+        </div>
+        <button class="btn-next">下一步</button>
+    </div>
+
+    <!-- ===== Overlay: Consent ===== -->
+    <div class="overlay" id="overlayConsent">
+        <div class="overlay-mask" onclick="cancelConsent()"></div>
+        <div class="overlay-content">
+            <div class="consent-header">
+                <div class="consent-icon">
+                    <svg viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                </div>
+                <div class="consent-title">用户信息授权确认</div>
+            </div>
+            <div class="consent-body">
+                <div class="consent-statement">
+                    我授权<strong>国信证券</strong>向<strong>中国银行</strong>传输姓名、证件类型、证件号码和手机号，<strong>中国银行</strong>向<strong>国信证券</strong>传输银行卡号和预留手机号，已阅读并同意签署
+                    <a class="consent-link" href="用户信息授权函.html" target="_blank">
+                        《用户信息授权函》
+                    </a>。
+                </div>
+                <div class="consent-notice">
+                    <span class="notice-icon">
+                        <svg viewBox="0 0 24 24"><path d="M12 9v4"></path><path d="M12 17h.01"></path><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path></svg>
+                    </span>
+                    <span>即将离开国信金太阳APP，跳转至中国银行页面进行银行卡绑定，绑定后可跳回国信金太阳APP继续完成开户，请确认是否跳转？</span>
+                </div>
+                <div class="consent-buttons">
+                    <button class="btn-cancel" onclick="cancelConsent()">取消</button>
+                    <button class="btn-confirm-auth" onclick="confirmConsent()">确认</button>
+                </div>
+                <div class="consent-tip">点击确认即表示同意授权，信息传输过程加密保护</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== Overlay: Loading（半屏弹起，沿用 V11；旋转圈颜色改品牌蓝） ===== -->
+    <div class="overlay" id="overlayLoading">
+        <div class="overlay-mask"></div>
+        <div class="overlay-content">
+            <div class="loading-wrap">
+                <div class="loading-spinner"></div>
+                <div class="loading-text">正在查询中...</div>
+                <div class="loading-sub">正在向中国银行查询您名下的银行卡</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ===== V15: 中国银行全屏页 - 短信验证（参考图10） ===== -->
+    <div class="boc-page" id="bocPageSms">
+        <header class="boc-header">
+            <button class="boc-back" onclick="closeAllBOCPages()" aria-label="返回">
+                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <div class="boc-title">验证银行预留手机号</div>
+        </header>
+        <main class="boc-main">
+            <div class="boc-brand">
+                <div class="boc-logo-circle">中</div>
+                <div class="boc-bank-name">中国银行</div>
+                <div class="boc-bank-en">BANK OF CHINA</div>
+            </div>
+            <div class="boc-form-card">
+                <div class="boc-form-row">
+                    <label class="boc-form-label">手机号</label>
+                    <div class="boc-form-value">185****6688</div>
+                </div>
+                <div class="boc-form-row">
+                    <label class="boc-form-label">验证码</label>
+                    <input type="tel" class="boc-form-input" id="bocSmsInput" placeholder="请输入短信验证码" maxlength="6" inputmode="numeric">
+                    <button type="button" class="boc-getcode" id="bocGetCodeBtn" onclick="startSmsCountdown()">获取验证码</button>
+                </div>
+            </div>
+        </main>
+        <div class="boc-footer">
+            <button type="button" class="boc-btn" onclick="bocSubmitSms()">提交</button>
+        </div>
+    </div>
+
+    <!-- ===== V15: 中国银行全屏页 - 选择银行卡（参考图11） ===== -->
+    <div class="boc-page" id="bocPageCard">
+        <header class="boc-header">
+            <button class="boc-back" onclick="showBOCPage('bocPageSms')" aria-label="返回">
+                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <div class="boc-title">选择绑定银行卡</div>
+        </header>
+        <main class="boc-main">
+            <div class="boc-brand">
+                <div class="boc-logo-circle">中</div>
+                <div class="boc-bank-name">中国银行</div>
+                <div class="boc-bank-en">BANK OF CHINA</div>
+            </div>
+            <div class="boc-subtitle">查询到您名下有 3 张银行卡，请选择一张</div>
+            <div class="boc-card-list">
+                <div class="boc-card-item selected" onclick="bocSelectCard(this)">
+                    <div class="boc-card-logo">中</div>
+                    <div class="boc-card-info">
+                        <div class="boc-card-number">6217 **** **** 3456</div>
+                        <div class="boc-card-type">中国银行借记卡（一类卡）</div>
+                    </div>
+                    <div class="boc-radio"></div>
+                </div>
+                <div class="boc-card-item" onclick="bocSelectCard(this)">
+                    <div class="boc-card-logo">中</div>
+                    <div class="boc-card-info">
+                        <div class="boc-card-number">6217 **** **** 8890</div>
+                        <div class="boc-card-type">中国银行借记卡（二类卡）</div>
+                    </div>
+                    <div class="boc-radio"></div>
+                </div>
+                <div class="boc-card-item" onclick="bocSelectCard(this)">
+                    <div class="boc-card-logo">中</div>
+                    <div class="boc-card-info">
+                        <div class="boc-card-number">6217 **** **** 5612</div>
+                        <div class="boc-card-type">中国银行借记卡（二类卡）</div>
+                    </div>
+                    <div class="boc-radio"></div>
+                </div>
+            </div>
+        </main>
+        <div class="boc-footer">
+            <button type="button" class="boc-btn" onclick="bocConfirmBind()">确认绑定</button>
+        </div>
+    </div>
+
+    <!-- ===== V15: 中行页面（无卡场景）：类似短信验证页，但无卡→无手机号/验证码可输入，页面留白，提示弹窗浮于其上 ===== -->
+    <div class="boc-page" id="bocPageBlank">
+        <header class="boc-header">
+            <button class="boc-back" onclick="closeAllBOCPages()" aria-label="返回">
+                <svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"></polyline></svg>
+            </button>
+            <div class="boc-title">验证银行预留手机号</div>
+        </header>
+        <main class="boc-main">
+            <div class="boc-brand">
+                <div class="boc-logo-circle">中</div>
+                <div class="boc-bank-name">中国银行</div>
+                <div class="boc-bank-en">BANK OF CHINA</div>
+            </div>
+            <!-- 无卡：无手机号/验证码输入项，页面留白，提示弹窗浮于其上 -->
+        </main>
+    </div>
+
+    <!-- ===== V15: 未查到中行账户 - 中行页面内居中弹窗（已跳转至中行页面，无需重复 logo；无短信步骤） ===== -->
+    <div class="overlay overlay--center" id="overlayNoAccount">
+        <div class="overlay-mask" onclick="closeNoAccountModal()"></div>
+        <div class="modal-box">
+            <div class="modal-body-text">尊敬的客户：目前未在我行查询到您的个人账户信息。您可以通过中国银行手机银行或持本人有效身份证件原件到中国银行网点开立账户。感谢您的支持与配合！</div>
+            <button class="modal-btn" onclick="closeNoAccountModal()">确定</button>
+        </div>
+    </div>
+
+    <!-- ===== V12: Overlay: Card Type Picker ===== -->
+    <div class="overlay" id="overlayCardType">
+        <div class="overlay-mask" onclick="closeOverlay('overlayCardType')"></div>
+        <div class="overlay-content">
+            <div class="overlay-header">
+                <div class="overlay-title">选择开卡证件类型</div>
+                <button class="overlay-close" onclick="closeOverlay('overlayCardType')" aria-label="关闭">
+                    <img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAADwAAAA8CAYAAAA6/NlyAAAGR0lEQVR4AexYa2wUVRQ+Z3a7BWuhUCBQYjTEEIIEQwgKJKQtL41iwmtnWxC0yHZZuh2g2hjRxPEHJhQtdNpSdldtwqvtFBCNCE2bttFEo0ajBIE0oohpC5ItNDxsuztzPbdGgtZKmZ1ZkmUn323Pua9zvvvN3Jm9AtxnV4JwvAueUDihcJytQOKWjjNBB9BJKDxgSeKsIqFwnAk6gE5C4QFLEmcVCYWHKqiqqg7Fr7YpQbVp+/b3U4c6Lpp+5f66peWBuvaKQH2O0XkMK3yaIiKCHRksGD4q9YSi7B9BVZah3F/rBAQVADN0BiPB2AWGCcui2GfXtPkM4DwCzMVhjga/XzWcCPzPpQTrchkIBwEwiTH2tuRx+sHgZZgwj+f15p7v6wtnAYOfyZ/di6xxZ/WHaWSbhrKAugYZ7uN3EzD2luRxvR7N5FER5oFf8a3+tS+iZZH9EwLOsoXDTaWl6mjyo4YSqFtHCVbTRDZa1DcKPS6Z7KhA80U1vn/wywW5v4U14KTbEGBmUgo0VVQcSYcoroqgmo+AQZpCIGVfLfSI28iOGqYQ5lkUecX2CLNx0mdpc5mhOyLNiqKO5W13W8qCdQWMwR4aR3czFhV6XCVkmwLTCPNstnhWdAphyCb7NAJMh2TWXFV1ZBz5Q4YSrN8sMCznAxBZoeR27uK2WcVUwjypggLxol2zZ9MzdwoRp0VskZaSSnU8b7tTUfxqMTJWSv1oM9a9PrerkmxTYTphnp3Xu/x31gv8lXWS/KnDk6Blp//wBLIHheKv24oIJcSU7mbmljw5hl89gwahBksI07wgSeJlIdk+n+zvqUyxo9ZaWqVOJHsAyoP1byIi35Q0AfFFKd/1wYBOJlVYRpjn53theSgswALaZb8jf3KSDVrfrax5iOxbIGW3UbvMGEQYsjW+fHHfrUYLDEsJ83yL1otd17XIQvoi+4b8Rx12W+s7FQceJhvomS0hZbcCsDB98+VKblcNr7eyWE6YJ//axtVXkhksoo3sK0CY5Eiyt5KyQUQopoXoA2YTJbd4iPe1usSEMCfh8YjdrLdvMQJ+gYiPUFlPC9ArAK4o9Kw8yvvEogixCPJ3DKlw9TUddf5Dq7+KIXShwM72OzH6EzPCsiwLSkB9DxmuJ2436Vb+FgEm6Bq0VgRqJ1NdTBATwk6nakvPeKyabuN1xOq6ztiS3u6eTAashZ7piToIreX+g1OozXJYTphORmzzFjF61bC1DOAaQ+2ZTR5XS3Hx2huRNHyWGDZxpQHsLcoedSr5FgLoZWDh9LLcYr/UDTUImEthugUdnpLcuZ+T3Y8iUfzjwaQbz5HTQEqPR4SWsqraaeRbBsGqmWVZdaRnXFZpJ3ZSjCtMg8W+DeKXZP8DeXl5PaGOG0up8jiRHifYhOZdwUPTybcElhBWFCU5PQMOU8bLiEQImb5Q8opfk/+fkOW8HtZzcRk1fkJlrE3Xm5Wqmhlkmw7TCVdXVw+D5PFHKdMlVC4zTV/g8+TwT0tyB4ckSb2hDlhBz/lHtEjpaLM1le1WZw4+wliLqYRLVXX49XDKx/QsPk3pXNI1fb60IecHsocEWRb7ktkVJz0GR2jAaMEOjZWBw7PINg2mEd6xY2+K4yoco8wWkUqdkbCevcmbc4r8u4LH4wmHOse6iHQ9DRylg9aoBGtnk20KTCG8nQ7ih40cdpyI8h/+7QLoWVsKcs4YzVCWsyOhztOr6EdFLc0xEnVsqAzUzyU7akRNWNm/f8QDaakNlMk8KhcY6Jm+/Jw2sqMCfZlFPkvD5xmwA4A4QgN2Qtldw2NENW9UhPkZNN50NALCHDqpOE//s+ik4lxUGd02uF4Uta6OM2tJ6b0IkIp226f0eZp5W5e7Ng0Tluk9a4+EGyniE5TQOR0ws9At/kK+qSCl9VDHmTw6JODn0w8S8WO7/DVPGg1imPCYMfZU2limEtk2u4aZmz3iBaNJ3GkcJ00nIS/BX+fUKYJgnwMGL8OEfb7lIQ0jkxzs6gyvV2w3GH/Iw5Cf2eY7820oPN7V/qMy5IH/6miYMJ9ns3vVJXqN3OR2rMpG98qTXHGj8aIibDTovRyXIHwvVz8Wse8vhWlFE4RpEeIaCYXjWl4il1CYFiGukVA4ruUlcvedwn8CAAD//6lnSiAAAAAGSURBVAMA+PUTl0k7o2gAAAAASUVORK5CYII=" alt="关闭">
+                </button>
+            </div>
+            <div class="overlay-body">
+                <div class="picker-option" data-cardtype="pass" onclick="confirmCardType(this, 'pass')">
+                    <div class="picker-radio"></div>
+                    <div class="picker-info">
+                        <div class="picker-label">通行证</div>
+                    </div>
+                </div>
+                <div class="picker-option" data-cardtype="residence" onclick="confirmCardType(this, 'residence')">
+                    <div class="picker-radio"></div>
+                    <div class="picker-info">
+                        <div class="picker-label">居住证</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div> <!-- end app-frame -->
+
+<script>
+    // ===== State =====
+    let selectedBank = null;
+    let isAuthorized = false;
+    let demoMode = null;
+    let boundCardNumber = '';
+    let clientType = 'mainland'; // mainland | hkmt
+    let cardType = 'pass';       // pass | residence
+    let isCardLocked = false;    // V13: 免卡输入卡号锁定标记
+    let inputSource = 'manual';  // V14: 卡号来源 'manual'(手动输入) | 'auto'(免卡输入)
+
+    // ===== V14: BIN 号段 → 银行映射（取前 4 位做 demo 匹配） =====
+    const BIN_MAP = [
+        { prefix: '6217', bank: '中国银行', color: '#B01C21', abbr: '中' },
+        { prefix: '6222', bank: '工商银行', color: '#C03A2B', abbr: '工' },
+        { prefix: '6225', bank: '建设银行', color: '#00539F', abbr: '建' },
+        { prefix: '6228', bank: '农业银行', color: '#00965E', abbr: '农' },
+        { prefix: '6226', bank: '招商银行', color: '#E60012', abbr: '招' },
+        { prefix: '6229', bank: '中信银行', color: '#CD1633', abbr: '中' },
+        { prefix: '6223', bank: '浦发银行', color: '#1E4B9E', abbr: '浦' },
+        { prefix: '6227', bank: '交通银行', color: '#003A70', abbr: '交' },
+        { prefix: '6221', bank: '民生银行', color: '#25AD8C', abbr: '民' },
+        { prefix: '6230', bank: '光大银行', color: '#8B2F89', abbr: '光' },
+        { prefix: '6224', bank: '广发银行', color: '#CF0A2C', abbr: '广' },
+        { prefix: '6235', bank: '邮储银行', color: '#00853D', abbr: '邮' },
+        { prefix: '6236', bank: '平安银行', color: '#FF6600', abbr: '平' },
+        { prefix: '6237', bank: '兴业银行', color: '#003686', abbr: '兴' },
+        { prefix: '6238', bank: '华夏银行', color: '#CC0000', abbr: '华' },
+    ];
+
+    // V14: 格式化卡号（4 位一组，明码展示，最长 19 位）
+    function formatCardNumber(value) {
+        const clean = value.replace(/\D/g, '').substring(0, 19);
+        return clean.replace(/(.{4})(?=.)/g, '$1 ').trim();
+    }
+
+    // V14: 根据卡号 BIN 匹配银行（长度 < 4 返回 null）
+    function matchBankByBin(cardNumber) {
+        const clean = cardNumber.replace(/\s/g, '');
+        if (clean.length < 4) return null;
+        const prefix = clean.substring(0, 4);
+        return BIN_MAP.find(r => r.prefix === prefix) || null;
+    }
+
+    // V14: 渲染银行字段（用 BIN 匹配结果或重置）
+    function renderBankFromBin(match) {
+        const display = document.getElementById('bankDisplay');
+        const ctaBtn = document.getElementById('ctaAutoQuery');
+        document.querySelectorAll('.bank-item').forEach(i => i.classList.remove('selected'));
+        if (match) {
+            display.innerHTML = `
+                <div class="bank-selected">
+                    <div class="bank-selected-logo" style="background:${match.color}">${match.abbr}</div>
+                    <span class="bank-selected-name">${match.bank}</span>
+                </div>
+            `;
+            const item = document.querySelector(`.bank-item[data-bank="${match.bank}"]`);
+            if (item) item.classList.add('selected');
+            if (match.bank === '中国银行') {
+                ctaBtn.classList.add('show');   // V14: 显示 CTA 入口
+                updateBankHint('中国银行');     // V14: 显示签约提示
+                // 关键：不弹授权（区别于点银行列表）
+            } else {
+                ctaBtn.classList.remove('show');
+                updateBankHint(null);
+            }
+            selectedBank = match.bank;
+        } else {
+            display.innerHTML = '<span class="bank-display-placeholder">输入卡号自动匹配</span>';
+            ctaBtn.classList.remove('show');
+            updateBankHint(null);
+            selectedBank = null;
+        }
+    }
+
+    // V14: 卡号输入事件处理
+    function handleCardInput(e) {
+        if (isCardLocked) return;           // 免卡输入锁定时不处理
+        inputSource = 'manual';
+        const raw = e.target.value;
+        const formatted = formatCardNumber(raw);
+        if (formatted !== raw) e.target.value = formatted;
+        const cleanNum = formatted.replace(/\s/g, '');
+        // 卡号有值时显示清空按钮
+        document.getElementById('cardClearBtn').classList.toggle('show', cleanNum.length > 0);
+        // 自动匹配银行
+        const match = matchBankByBin(formatted);
+        renderBankFromBin(match);
+        // 更新 demo 面板高亮（不强制）
+        if (match && match.bank === '中国银行') {
+            updateStateBtns('manual-boc');
+        } else if (!cleanNum) {
+            updateStateBtns('default');
+        }
+    }
+
+    // ===== V12: 客户场景切换 =====
+    function selectClientType(type) {
+        clientType = type;
+        const cardTypeRow = document.getElementById('idCardTypeRow');
+        const cardTypeSection = document.getElementById('cardTypeSection');
+
+        if (type === 'hkmt') {
+            cardTypeRow.classList.add('show');
+            if (cardTypeSection) cardTypeSection.classList.remove('panel-section--hidden');
+            selectCardType('pass');
+        } else {
+            cardTypeRow.classList.remove('show');
+            if (cardTypeSection) cardTypeSection.classList.add('panel-section--hidden');
+        }
+        updateClientTypeBtns(type);
+        resetFormState();
+    }
+
+    // ===== V12: 开卡证件类型切换 =====
+    function selectCardType(type) {
+        if (cardType === type) return;
+        cardType = type;
+        const display = document.querySelector('#cardTypeDisplay span');
+        if (display) display.textContent = type === 'pass' ? '通行证' : '居住证';
+        updateCardTypeBtns(type);
+        resetFormState();
+    }
+
+    // ===== V12: 半屏证件类型选择器 =====
+    function openCardTypePicker() {
+        document.querySelectorAll('#overlayCardType .picker-option').forEach(c => {
+            c.classList.toggle('selected', c.dataset.cardtype === cardType);
+        });
+        showOverlay('overlayCardType');
+    }
+
+    function confirmCardType(el, type) {
+        document.querySelectorAll('#overlayCardType .picker-option').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+        const changed = (cardType !== type);
+        setTimeout(() => {
+            closeOverlay('overlayCardType');
+            if (changed) selectCardType(type);
+        }, 180);
+    }
+
+    function resetFormState() {
+        selectedBank = null;
+        isAuthorized = false;
+        demoMode = null;
+        boundCardNumber = '';
+        closeAllOverlays();
+        document.querySelectorAll('.bank-item').forEach(i => i.classList.remove('selected'));
+        document.getElementById('bankDisplay').innerHTML = '<span class="bank-display-placeholder">输入卡号自动匹配</span>';
+        document.getElementById('ctaAutoQuery').classList.remove('show');
+        _resetCardInputOnly();   // V14: 只重置卡号（不动银行，下方会全清）
+        updateBankHint(null);
+        updateStateBtns('default', null);
+    }
+
+    // ===== V13: 中国银行签约提示 =====
+    function updateBankHint(bank) {
+        const hint = document.getElementById('bankHint');
+        if (!hint) return;
+        if (bank === '中国银行') {
+            hint.classList.add('show');
+        } else {
+            hint.classList.remove('show');
+        }
+    }
+
+    // ===== V13: 免卡输入卡号锁定 / 清空 =====
+    function lockCardInput() {
+        isCardLocked = true;
+        inputSource = 'auto';
+        const input = document.getElementById('cardInput');
+        input.readOnly = true;
+        document.getElementById('cardClearBtn').classList.add('show');
+    }
+
+    // V14: 内部工具 — 只重置卡号本身，不动银行状态
+    function _resetCardInputOnly() {
+        isCardLocked = false;
+        const input = document.getElementById('cardInput');
+        input.value = '';
+        input.readOnly = false;
+        document.getElementById('cardClearBtn').classList.remove('show');
+    }
+
+    // V14: 用户点 ✕ 触发的清空（双模式）
+    function clearCardInput() {
+        const wasLocked = isCardLocked;     // 免卡输入锁定状态
+        _resetCardInputOnly();
+        if (wasLocked) {
+            // 免卡输入清空：保留银行、CTA、hint、isAuthorized
+        } else {
+            // 手动输入清空：清空匹配的银行、CTA、hint
+            inputSource = 'manual';
+            renderBankFromBin(null);
+            updateStateBtns('default');
+        }
+    }
+
+    // ===== Bank Selection =====
+    function selectBank(el) {
+        const bank = el.dataset.bank;
+        const color = el.dataset.color;
+        const abbr = el.dataset.abbr;
+
+        document.querySelectorAll('.bank-item').forEach(i => i.classList.remove('selected'));
+        el.classList.add('selected');
+
+        const display = document.getElementById('bankDisplay');
+        display.innerHTML = `
+            <div class="bank-selected">
+                <div class="bank-selected-logo" style="background:${color}">${abbr}</div>
+                <span class="bank-selected-name">${bank}</span>
+            </div>
+        `;
+
+        const prevBank = selectedBank;
+        selectedBank = bank;
+
+        _resetCardInputOnly();          // V14: 切银行只清卡号本身
+
+        const ctaBtn = document.getElementById('ctaAutoQuery');
+        if (bank === '中国银行') {
+            ctaBtn.classList.add('show');
+        } else {
+            ctaBtn.classList.remove('show');
+        }
+
+        if (bank === '中国银行' && prevBank !== '中国银行' && !isAuthorized) {
+            setTimeout(() => showOverlay('overlayConsent'), 300);
+        }
+
+        updateBankHint(bank);           // V13: 中国银行签约提示
+        updateStateBtns(bank === '中国银行' ? 'boc' : 'default');
+    }
+
+    // ===== CTA Click =====
+    function handleCTAClick() {
+        if (isAuthorized) {
+            showLoading();
+        } else {
+            showOverlay('overlayConsent');
+        }
+    }
+
+    // ===== Consent Actions =====
+    function confirmConsent() {
+        isAuthorized = true;
+        closeOverlay('overlayConsent');
+        showLoading();
+        updateStateBtns('boc');
+    }
+
+    function cancelConsent() {
+        closeOverlay('overlayConsent');
+        updateStateBtns('boc');
+    }
+
+    // ===== V15: Auto Query Flow（授权后跳转中国银行页面） =====
+    function showLoading() {
+        showOverlay('overlayLoading');
+        setTimeout(() => {
+            closeOverlay('overlayLoading');
+            // 需求③：无中行卡 → 不走短信验证，直接弹窗提示；否则 → 短信验证页（需求②）
+            if (demoMode === 'fail') {
+                showNoAccountModal();
+            } else {
+                showBOCPage('bocPageSms');
+            }
+        }, 1500);
+    }
+
+    // ===== V15: 中国银行全屏页切换工具 =====
+    const BOC_RESULT_KEY = { bocPageSms: 'sms', bocPageCard: 'card' };
+    function showBOCPage(id) {
+        closeAllOverlays();
+        document.querySelectorAll('.boc-page').forEach(p => p.classList.remove('show'));
+        document.getElementById(id).classList.add('show');
+        updateStateBtns('boc', BOC_RESULT_KEY[id]);
+    }
+    function closeAllBOCPages() {
+        document.querySelectorAll('.boc-page').forEach(p => p.classList.remove('show'));
+        resetSmsForm();              // 复位短信输入 / 倒计时 / 选卡选中
+        updateStateBtns('boc');
+    }
+
+    // V15 需求③：未查到中行账户 - 先弹空白中行页（类似短信页但无输入项），提示弹窗浮于其上
+    function showNoAccountModal() {
+        closeAllOverlays();
+        document.querySelectorAll('.boc-page').forEach(p => p.classList.remove('show'));
+        document.getElementById('bocPageBlank').classList.add('show');
+        showOverlay('overlayNoAccount');          // overlay--center z-index 400，盖在空白页之上
+        updateStateBtns('boc', 'noaccount');
+    }
+    function closeNoAccountModal() {
+        closeOverlay('overlayNoAccount');
+        closeAllBOCPages();                        // 同时收起空白中行页，返回国信主页
+    }
+
+    // 短信验证页：获取验证码 60s 倒计时
+    let smsTimer = null;
+    function startSmsCountdown() {
+        const btn = document.getElementById('bocGetCodeBtn');
+        if (!btn || btn.disabled) return;
+        let left = 60;
+        btn.disabled = true;
+        btn.textContent = '重新获取(' + left + 's)';
+        smsTimer = setInterval(() => {
+            left--;
+            if (left <= 0) {
+                clearInterval(smsTimer); smsTimer = null;
+                btn.disabled = false;
+                btn.textContent = '获取验证码';
+            } else {
+                btn.textContent = '重新获取(' + left + 's)';
+            }
+        }, 1000);
+    }
+    function resetSmsForm() {
+        if (smsTimer) { clearInterval(smsTimer); smsTimer = null; }
+        const btn = document.getElementById('bocGetCodeBtn');
+        if (btn) { btn.disabled = false; btn.textContent = '获取验证码'; }
+        const input = document.getElementById('bocSmsInput');
+        if (input) input.value = '';
+        // 选卡页复位为首张选中
+        document.querySelectorAll('#bocPageCard .boc-card-item').forEach((it, i) => {
+            it.classList.toggle('selected', i === 0);
+        });
+    }
+
+    // 短信验证页：提交 → 进入选卡页
+    function bocSubmitSms() {
+        showBOCPage('bocPageCard');
+    }
+
+    // 选卡页：单选切换
+    function bocSelectCard(el) {
+        document.querySelectorAll('#bocPageCard .boc-card-item').forEach(c => c.classList.remove('selected'));
+        el.classList.add('selected');
+    }
+
+    // 选卡页：确认绑定 → 卡号脱敏填回主页 + 锁定（复用 V13 lockCardInput / boundCardNumber）
+    function bocConfirmBind() {
+        const selected = document.querySelector('#bocPageCard .boc-card-item.selected .boc-card-number');
+        boundCardNumber = selected ? selected.textContent.trim() : '';
+        closeAllBOCPages();
+        document.getElementById('cardInput').value = boundCardNumber;
+        lockCardInput();
+        updateStateBtns('boc');
+    }
+
+    // ===== Overlay Utils =====
+    function showOverlay(id) {
+        const el = document.getElementById(id);
+        el.classList.add('show');
+        const mask = el.querySelector('.overlay-mask');
+        if (mask) mask.classList.add('show');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeOverlay(id) {
+        const el = document.getElementById(id);
+        el.classList.remove('show');
+        const mask = el.querySelector('.overlay-mask');
+        if (mask) mask.classList.remove('show');
+        document.body.style.overflow = '';
+    }
+
+    function closeAllOverlays() {
+        document.querySelectorAll('.overlay').forEach(o => {
+            o.classList.remove('show');
+            const mask = o.querySelector('.overlay-mask');
+            if (mask) mask.classList.remove('show');
+        });
+        document.body.style.overflow = '';
+    }
+
+    // ===== Footer =====
+    function toggleAgree() {
+        document.getElementById('agreeRow').classList.toggle('checked');
+    }
+
+    function handleBankRowClick() {
+        document.querySelector('.bank-block').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // ===== Demo Controls =====
+    function demoReset() {
+        resetFormState();
+    }
+
+    function demoSelectBOC() {
+        resetFormState();
+        const bocItem = document.querySelector('.boc-item');
+        selectBank(bocItem);
+        updateStateBtns('boc');
+    }
+
+    // V14: 手动输入匹配中行（明码、可编辑、CTA 显示但不弹授权）
+    function demoManualMatchBOC() {
+        resetFormState();
+        const input = document.getElementById('cardInput');
+        input.value = '6217 1234 5678 9012 345';   // 明码、可继续编辑
+        inputSource = 'manual';
+        // 触发 input 事件走自动匹配逻辑
+        input.dispatchEvent(new Event('input', { bubbles: true }));
+        updateStateBtns('manual-boc');
+    }
+
+    // V15: 直达中国银行页面（短信验证 / 选卡 / 未查到账户弹窗）
+    function demoShowBOC(key) {
+        isAuthorized = true;
+        selectedBank = '中国银行';
+        const bocItem = document.querySelector('.boc-item');
+        bocItem.classList.add('selected');
+        document.getElementById('bankDisplay').innerHTML = `
+            <div class="bank-selected">
+                <div class="bank-selected-logo" style="background:#B01C21">中</div>
+                <span class="bank-selected-name">中国银行</span>
+            </div>
+        `;
+        document.getElementById('ctaAutoQuery').classList.add('show');
+        updateBankHint('中国银行');     // V13: 显示中国银行签约提示
+        closeAllOverlays();
+        if (key === 'noaccount') {
+            demoMode = 'fail';
+            showNoAccountModal();
+        } else {
+            demoMode = 'multi';
+            resetSmsForm();
+            showBOCPage(key === 'sms' ? 'bocPageSms' : 'bocPageCard');
+        }
+    }
+
+    // ===== Panel Button Highlight =====
+    function updateClientTypeBtns(active) {
+        document.querySelectorAll('[data-client]').forEach(b => {
+            b.classList.toggle('active', b.dataset.client === active);
+        });
+    }
+
+    function updateCardTypeBtns(active) {
+        document.querySelectorAll('[data-cardtype]').forEach(b => {
+            b.classList.toggle('active', b.dataset.cardtype === active);
+        });
+    }
+
+    function updateStateBtns(stateActive, resultActive) {
+        const stateBtns = document.querySelectorAll('[data-state]');
+        const resultBtns = document.querySelectorAll('[data-result]');
+        stateBtns.forEach(b => b.classList.toggle('active', b.dataset.state === stateActive));
+        if (resultActive !== null && resultActive !== undefined) {
+            resultBtns.forEach(b => b.classList.toggle('active', b.dataset.result === resultActive));
+        }
+    }
+
+    // ===== Init =====
+    selectClientType('mainland');
+    updateCardTypeBtns('pass');
+
+    // V14: 绑定卡号输入事件（自动匹配银行）
+    document.getElementById('cardInput').addEventListener('input', handleCardInput);
+
+    // V15: 批注工具按页隔离钩子（CLAUDE.md 批注兼容性规范）
+    // 全屏页/弹层通过加 .show class 切换（非标准 4 方式），须显式返回当前页标识
+    window.__annoGetPage = function () {
+        const overlayShown = document.querySelector('.overlay.show');
+        if (overlayShown) return overlayShown.id;       // overlayConsent / overlayLoading / overlayCardType / overlayNoAccount（取最上层）
+        const bocShown = document.querySelector('.boc-page.show');
+        if (bocShown) return bocShown.id;               // bocPageSms / bocPageCard / bocPageBlank
+        return '绑定银行卡主页';
+    };
+</script>
+
+</body>
+</html>
